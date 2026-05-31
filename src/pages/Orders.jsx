@@ -12,7 +12,7 @@ const ALL_STATUS_CARDS = [
   { key: 'dostavka',  label: 'Dastavka',   icon: Truck,     color: 'text-blue-600',   ring: 'ring-blue-500',   bg: 'bg-blue-50',   darkBg: 'bg-blue-950/40' },
 ];
 
-export default function Orders({ orders, onDetail, onRefresh }) {
+export default function Orders({ orders, onDetail, onRefresh, loading = false }) {
   const { dark } = useTheme();
   const { role } = useRole();
 
@@ -95,7 +95,10 @@ export default function Orders({ orders, onDetail, onRefresh }) {
       </div>
 
       {/* Orders list */}
-      {allVisibleOrders.length === 0 ? (
+      {loading && allVisibleOrders.length === 0 ? (
+        // Skeleton — ma'lumot yuklanayotganda
+        [1, 2, 3].map(i => <OrderSkeleton key={i} dark={dark} />)
+      ) : allVisibleOrders.length === 0 ? (
         <div className={`flex flex-col items-center justify-center py-16`}>
           <PackageOpen size={48} className={`mb-3 ${dark ? 'text-gray-700' : 'text-gray-300'}`} />
           <p className={`text-sm font-medium ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Buyurtmalar yo'q</p>
@@ -110,6 +113,22 @@ export default function Orders({ orders, onDetail, onRefresh }) {
           />
         ))
       )}
+    </div>
+  );
+}
+
+function OrderSkeleton({ dark }) {
+  const bg   = dark ? 'bg-gray-800' : 'bg-gray-200';
+  const card = dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100';
+  return (
+    <div className={`rounded-2xl p-4 mb-3 border ${card}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className={`h-4 w-24 rounded-full ${bg} animate-pulse`} />
+        <div className={`h-5 w-16 rounded-full ${bg} animate-pulse`} />
+      </div>
+      <div className={`h-4 w-40 rounded-full mb-2 ${bg} animate-pulse`} />
+      <div className={`h-3 w-28 rounded-full mb-2 ${bg} animate-pulse`} />
+      <div className={`h-3 w-36 rounded-full ${bg} animate-pulse opacity-60`} />
     </div>
   );
 }

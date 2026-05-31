@@ -1,5 +1,13 @@
 import { supabase } from '../lib/supabaseClient';
 
+// ── Memory cache — Frankfurt pingini yashiradi ────────
+let ordersCache = null;
+let lastFetch   = 0;
+const CACHE_TTL = 60000; // 60 soniya
+
+export function hasCachedOrders() { return ordersCache !== null; }
+export function invalidateCache() { ordersCache = null; lastFetch = 0; }
+
 // ── Har bir Supabase so'roviga 10s timeout ────────────
 const TIMEOUT_MS = 10000;
 
@@ -101,18 +109,22 @@ function capitalize(s) {
 
 const LIST_SELECT = '*, yuvuvchi:xodimlar!yuvuvchi_id(ism, rol)';
 
-// ── Ro'yxat ───────────────────────────────────────────
+// ── Ro'yxat (kesh bilan) ─────────────────────────────
 export async function getAll() {
-  console.log('[orders] getAll...');
+  // Kesh yangi bo'lsa — darhol qaytар (0 ms)
+  if (ordersCache && Date.now() - lastFetch < CACHE_TTL) {
+    return ordersCache;
+  }
   const { data, error } = await run(
     supabase.from('buyurtmalar').select(LIST_SELECT).order('id', { ascending: false })
   );
   if (error) {
     console.error('[orders] getAll xato:', error.message);
-    return [];
+    return ordersCache || []; // xato bo'lsa eski keshni qaytар
   }
-  console.log('[orders] getAll:', data?.length ?? 0, 'ta');
-  return (data || []).map(row => dbToApp(row));
+  ordersCache = (data || []).map(row => dbToApp(row));
+  lastFetch   = Date.now();
+  return ordersCache;
 }
 
 // ── Bitta buyurtma (izohlar + harakatlar parallel) ───
@@ -180,6 +192,7 @@ export async function create(data) {
     })
   ).catch(() => {});
 
+  invalidateCache();
   return dbToApp(newRow);
 }
 
@@ -197,6 +210,7 @@ export async function update(id, changes) {
     supabase.from('buyurtmalar').update(dbChanges).eq('id', id)
   );
   if (error) throw error;
+  invalidateCache();
 }
 
 // ── Izoh qo'shish ─────────────────────────────────────
@@ -223,6 +237,7 @@ export async function remove(id) {
     supabase.from('buyurtmalar').delete().eq('id', id)
   );
   if (error) throw error;
+  invalidateCache();
 }
 
 // ── Qidiruv (sinxron) ────────────────────────────────

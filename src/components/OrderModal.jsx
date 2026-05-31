@@ -32,10 +32,10 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   // Modal ochilgandagi boshlang'ich status
   const initialStatusRef = useRef(initialOrder.status);
 
-  // Status o'zgarganda modal avtomatik yopiladi
+  // Status o'zgarganda modal yopiladi, ro'yxat to'liq yangilanadi
   useEffect(() => {
     if (order.status !== initialStatusRef.current) {
-      if (onRefresh) onRefresh();
+      if (onRefresh) onRefresh(null); // null → to'liq refresh + kesh tozalash
       onClose();
     }
   }, [order.status]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -43,8 +43,13 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   // ── Modal ichida buyurtmani yangilash ────────────
   const refresh = async () => {
     const updated = await orderService.getById(order.id);
-    if (updated) setOrder(updated);
-    if (onRefresh) onRefresh();
+    if (updated) {
+      setOrder(updated);
+      // updated orderни uzat → App.jsx faqat shu elementni yangilaydi
+      if (onRefresh) onRefresh(updated);
+    } else {
+      if (onRefresh) onRefresh(); // fallback: to'liq yangilash
+    }
   };
 
   const doUpdate = async (changes, amal) => {

@@ -15,7 +15,7 @@ import Customers from './pages/Customers';
 import Statistics from './pages/Statistics';
 import Login from './pages/Login';
 import OrderModal from './components/OrderModal';
-import { getAll, search } from './services/orders';
+import { getAll, search, hasCachedOrders, invalidateCache } from './services/orders';
 
 // ── 10 soniyalik timeout ────────────────────────────────
 async function withTimeout(promise, ms = 10000) {
@@ -101,14 +101,13 @@ function AppContent() {
   const channelRef      = useRef(null);
   const reconnTimerRef  = useRef(null);
 
-  // ── Ma'lumot yuklash: timeout 10s + 1 marta avtomatik retry ──
+  // ── Ma'lumot yuklash: kesh → server, 1 marta avtomatik retry ──
   const refresh = useCallback(async () => {
     try {
       const all = await withTimeout(getAll());
       setOrders(all);
       setOrdersError(null);
     } catch {
-      // Birinchi urinish muvaffaqiyatsiz — bir marta qayta urish
       try {
         const all = await withTimeout(getAll());
         setOrders(all);
@@ -118,6 +117,16 @@ function AppContent() {
       }
     }
   }, []);
+
+  // ── Bitta buyurtmani local yangilash (tarmoq so'rovsiz) ──
+  const refreshOrder = useCallback((updatedOrder) => {
+    if (updatedOrder?.id) {
+      setOrders(prev => prev.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+    } else {
+      invalidateCache();
+      refresh();
+    }
+  }, [refresh]);
 
   // ── Realtime kanalini (qayta) sozlash ────────────────
   const setupChannel = useCallback(() => {
@@ -131,7 +140,10 @@ function AppContent() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'buyurtmalar' },
-          () => { refresh(); }
+          () => {
+            invalidateCache(); // real-time o'zgarish — keshni tozala
+            refresh();
+          }
         )
         .subscribe();
     } catch (err) {
@@ -143,7 +155,8 @@ function AppContent() {
   useEffect(() => {
     if (!role) return;
 
-    setOrdersLoading(true);
+    // Kesh mavjud bo'lsa — spinner ko'rsatma (ma'lumot darhol chiqadi)
+    if (!hasCachedOrders()) setOrdersLoading(true);
     refresh().finally(() => setOrdersLoading(false));
     setupChannel();
 
@@ -218,7 +231,7 @@ function AppContent() {
           <div className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3">
             <span className="text-sm text-red-600 flex-1">⚠️ {ordersError}</span>
             <button
-              onClick={() => { setOrdersError(null); setOrdersLoading(true); refresh().finally(() => setOrdersLoading(false)); }}
+              onClick={() => { setOrdersError(null); invalidateCache(); setOrdersLoading(true); refresh().finally(() => setOrdersLoading(false)); }}
               className="text-xs font-bold text-red-600 px-3 py-1.5 rounded-lg bg-red-100 active:scale-95 transition-all flex-shrink-0"
             >
               Qayta urinish
@@ -233,7 +246,7 @@ function AppContent() {
 
         <Routes>
           <Route path="/" element={
-            <Orders orders={orders} onDetail={setSelectedOrder} onRefresh={refresh} />
+            <Orders orders={orders} onDetail={setSelectedOrder} onRefresh={refresh} loading={ordersLoading} />
           } />
           <Route path="/yangi" element={
             <NewOrder onCreated={() => { refresh(); navigate('/'); }} />
@@ -252,7 +265,7 @@ function AppContent() {
         <OrderModal
           order={selectedOrder}
           onClose={() => setSelectedOrder(null)}
-          onRefresh={refresh}
+          onRefresh={refreshOrder}
         />
       )}
     </div>
