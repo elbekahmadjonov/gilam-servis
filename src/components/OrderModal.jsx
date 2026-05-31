@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { X, Send, History, Edit2, XCircle, CheckCircle, Lock, MapPin, ExternalLink } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import { useTheme } from '../context/ThemeContext';
@@ -29,33 +29,33 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   const [bigImg,        setBigImg]        = useState(null);
   const [saving,        setSaving]        = useState(false);
 
+  // Modal ochilgandagi boshlang'ich status
+  const initialStatusRef = useRef(initialOrder.status);
+
+  // Status o'zgarganda modal avtomatik yopiladi
+  useEffect(() => {
+    if (order.status !== initialStatusRef.current) {
+      if (onRefresh) onRefresh();
+      onClose();
+    }
+  }, [order.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Modal ichida buyurtmani yangilash ────────────
   const refresh = async () => {
     const updated = await orderService.getById(order.id);
     if (updated) setOrder(updated);
-    if (onRefresh) onRefresh(); // App.jsx ro'yxatini ham yangilaydi
+    if (onRefresh) onRefresh();
   };
 
   const doUpdate = async (changes, amal) => {
     const snapshot = order;
-    // Status haqiqatan o'zgarяptimi?
-    const statusOzgardi = 'status' in changes && changes.status !== snapshot.status;
-
-    // Optimistik yangilanish
+    // Optimistik yangilanish — status o'zgarsa useEffect modal yopadi
     setOrder(prev => ({ ...prev, ...changes }));
     setSaving(true);
     try {
       await orderService.update(snapshot.id, changes);
       if (amal) await orderService.addHarakat(snapshot.id, amal, role);
-
-      if (statusOzgardi) {
-        // Status o'zgarganda → modalni yopish, ro'yxatni yangilash
-        if (onRefresh) onRefresh();
-        onClose();
-      } else {
-        // Bosqich / izoh o'zgarganda → modal ochiq, faqat ichini yangilash
-        await refresh();
-      }
+      await refresh();
     } catch (err) {
       setOrder(snapshot);
       console.error('Yangilash xatosi:', err);
@@ -113,7 +113,6 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
       { status: 'otkaz', otkazSababi: bekorSabab },
       `Bekor qilindi: ${bekorSabab}`
     );
-    // doUpdate status o'zgarishini aniqlaydi va modalni o'zi yopadi
   };
 
   const handleTahrir = async (data) => {
@@ -407,7 +406,6 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
               status: 'tugadi',
               bosqich: { ...order.bosqich, yetkazildi: true },
             }, 'Yetkazildi → Tugadi');
-            // doUpdate status o'zgarishini aniqlaydi va modalni o'zi yopadi
           }}
         />
       )}
