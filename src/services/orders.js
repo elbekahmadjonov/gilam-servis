@@ -93,12 +93,17 @@ const LIST_SELECT = '*, yuvuvchi:xodimlar!yuvuvchi_id(ism, rol)';
 
 // ── Ro'yxat (izohlar/harakatlar yo'q — tez) ─────────
 export async function getAll() {
+  console.log('[orders] getAll so\'rov yuborildi...');
   const { data, error } = await supabase
     .from('buyurtmalar')
     .select(LIST_SELECT)
     .order('id', { ascending: false });
 
-  if (error) { console.error('getAll xato:', error); return []; }
+  if (error) {
+    console.error('[orders] getAll xato:', error.message, error.code);
+    return [];
+  }
+  console.log('[orders] getAll:', data?.length ?? 0, 'ta buyurtma olindi');
   return (data || []).map(row => dbToApp(row));
 }
 

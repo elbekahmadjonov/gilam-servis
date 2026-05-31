@@ -51,9 +51,27 @@ function ConnectionBanner({ online, justReconnected }) {
   return null;
 }
 
-// ── Sessiya yuklanmoqda ─────────────────────────────────
-function LoadingScreen() {
+// ── Sessiya yuklanmoqda (yoki xato) ────────────────────
+function LoadingScreen({ authError, onRetry }) {
   const { dark } = useTheme();
+
+  if (authError) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center p-8 gap-4 ${dark ? 'bg-black' : 'bg-gray-50'}`}>
+        <div className="text-5xl">⚠️</div>
+        <p className={`text-sm font-semibold text-center max-w-xs ${dark ? 'text-gray-300' : 'text-gray-600'}`}>
+          {authError}
+        </p>
+        <button
+          onClick={onRetry}
+          className="mt-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold rounded-2xl active:scale-95 transition-all shadow-md"
+        >
+          Qayta urinish
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen flex items-center justify-center ${dark ? 'bg-black' : 'bg-gray-50'}`}>
       <div className="text-center">
@@ -68,7 +86,7 @@ function LoadingScreen() {
 
 // ── Asosiy ilova ────────────────────────────────────────
 function AppContent() {
-  const { role, loading } = useRole();
+  const { role, loading, authError, retryInit } = useRole();
   const { dark } = useTheme();
 
   const [orders,          setOrders]          = useState([]);
@@ -170,8 +188,8 @@ function AppContent() {
     };
   }, [refresh, setupChannel]);
 
-  if (loading) return <LoadingScreen />;
-  if (!role)   return <Login />;
+  if (loading || authError) return <LoadingScreen authError={authError} onRetry={retryInit} />;
+  if (!role)                return <Login />;
 
   const searchResults = search(searchQuery, orders);
 
