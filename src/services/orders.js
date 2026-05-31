@@ -1,9 +1,22 @@
-// =====================================================
-// orders.js — Supabase CRUD (localStorage o'chirildi)
-// Barcha funksiyalar async. Funksiya nomlari o'zgarmagan.
-// =====================================================
-
 import { supabase } from '../lib/supabaseClient';
+
+// ── Har bir Supabase so'roviga 10s timeout ────────────
+const TIMEOUT_MS = 10000;
+
+async function run(query) {
+  let timerId;
+  const timeout = new Promise((_, reject) => {
+    timerId = setTimeout(
+      () => reject(new Error("So'rov vaqti tugadi (10s)")),
+      TIMEOUT_MS
+    );
+  });
+  try {
+    return await Promise.race([query, timeout]);
+  } finally {
+    clearTimeout(timerId);
+  }
+}
 
 async function getCurrentUserId() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,28 +35,26 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
     bosqich:          row.bosqich      || {},
     tovarlar:         row.tovarlar     || {},
     narxlar:          row.narxlar      || {},
-    umumiyHisob:      Number(row.umumiy_hisob)   || 0,
-    chegirma:         Number(row.chegirma)         || 0,
-    yakuniySumma:     Number(row.yakuniy_summa)    || 0,
+    umumiyHisob:      Number(row.umumiy_hisob)  || 0,
+    chegirma:         Number(row.chegirma)       || 0,
+    yakuniySumma:     Number(row.yakuniy_summa)  || 0,
     tolov:            row.tolov        || {},
-    qarz:             Number(row.qarz)             || 0,
+    qarz:             Number(row.qarz)           || 0,
     otkazSababi:      row.otkaz_sababi || '',
     lat:              row.lat  != null ? row.lat  : null,
     lng:              row.lng  != null ? row.lng  : null,
-    // yuvuvchi: xodimlar jadvali bilan join natijasi (ism yoki rol)
     yuvuvchi:         row.yuvuvchi?.ism
                         || (row.yuvuvchi?.rol ? capitalize(row.yuvuvchi.rol) : null),
     yuvuvchiId:       row.yuvuvchi_id  || null,
     yaratilganVaqt:   row.yaratilgan_vaqt,
     yangilanganVaqt:  row.yangilangan_vaqt,
-    // Izohlar va harakatlar (getById dan keladi)
     izohlar:    izohlar.map(iz => ({
       tur:     'matn',
       matn:    iz.matn || '',
       vaqt:    iz.vaqt,
       muallif: iz.muallif?.ism || iz.muallif?.rol
                  ? (iz.muallif.ism || capitalize(iz.muallif.rol))
-                 : 'Noma\'lum',
+                 : "Noma'lum",
     })),
     harakatlar: harakatlar.map(h => ({
       amal:    h.amal,
@@ -88,56 +99,54 @@ function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-// Buyurtmalar ro'yxati uchun SELECT (yuvuvchi join)
 const LIST_SELECT = '*, yuvuvchi:xodimlar!yuvuvchi_id(ism, rol)';
 
-// ── Ro'yxat (izohlar/harakatlar yo'q — tez) ─────────
+// ── Ro'yxat ───────────────────────────────────────────
 export async function getAll() {
-  console.log('[orders] getAll so\'rov yuborildi...');
-  const { data, error } = await supabase
-    .from('buyurtmalar')
-    .select(LIST_SELECT)
-    .order('id', { ascending: false });
-
+  console.log('[orders] getAll...');
+  const { data, error } = await run(
+    supabase.from('buyurtmalar').select(LIST_SELECT).order('id', { ascending: false })
+  );
   if (error) {
-    console.error('[orders] getAll xato:', error.message, error.code);
+    console.error('[orders] getAll xato:', error.message);
     return [];
   }
-  console.log('[orders] getAll:', data?.length ?? 0, 'ta buyurtma olindi');
+  console.log('[orders] getAll:', data?.length ?? 0, 'ta');
   return (data || []).map(row => dbToApp(row));
 }
 
-// ── Bitta buyurtma (izohlar + harakatlar bilan) ──────
+// ── Bitta buyurtma (izohlar + harakatlar parallel) ───
 export async function getById(id) {
-  const { data: row, error: e1 } = await supabase
-    .from('buyurtmalar')
-    .select(LIST_SELECT)
-    .eq('id', id)
-    .single();
-  if (e1) return null;
+  const { data: row, error } = await run(
+    supabase.from('buyurtmalar').select(LIST_SELECT).eq('id', id).single()
+  );
+  if (error) return null;
 
-  const { data: izohlar } = await supabase
-    .from('izohlar')
-    .select('*, muallif:xodimlar!muallif_id(ism, rol)')
-    .eq('buyurtma_id', id)
-    .order('vaqt', { ascending: true });
+  // Izohlar va harakatlar parallel yuklanadi
+  const [izohRes, harakatRes] = await Promise.all([
+    run(
+      supabase.from('izohlar')
+        .select('*, muallif:xodimlar!muallif_id(ism, rol)')
+        .eq('buyurtma_id', id)
+        .order('vaqt', { ascending: true })
+    ),
+    run(
+      supabase.from('harakatlar')
+        .select('*, muallif:xodimlar!muallif_id(ism, rol)')
+        .eq('buyurtma_id', id)
+        .order('vaqt', { ascending: true })
+    ),
+  ]);
 
-  const { data: harakatlar } = await supabase
-    .from('harakatlar')
-    .select('*, muallif:xodimlar!muallif_id(ism, rol)')
-    .eq('buyurtma_id', id)
-    .order('vaqt', { ascending: true });
-
-  return dbToApp(row, izohlar || [], harakatlar || []);
+  return dbToApp(row, izohRes.data || [], harakatRes.data || []);
 }
 
 // ── Yaratish ─────────────────────────────────────────
 export async function create(data) {
   const userId = await getCurrentUserId();
 
-  const { data: newRow, error } = await supabase
-    .from('buyurtmalar')
-    .insert({
+  const { data: newRow, error } = await run(
+    supabase.from('buyurtmalar').insert({
       mijoz_ismi:    data.mijozIsmi  || '',
       telefon:       data.telefon    || '',
       manzil:        data.manzil     || '',
@@ -157,18 +166,19 @@ export async function create(data) {
       qarz:          0,
       otkaz_sababi:  '',
       yaratgan_id:   userId,
-    })
-    .select()
-    .single();
+    }).select().single()
+  );
 
   if (error) throw error;
 
-  // Boshlang'ich harakat
-  await supabase.from('harakatlar').insert({
-    buyurtma_id: newRow.id,
-    amal:        'Buyurtma yaratildi',
-    muallif_id:  userId,
-  });
+  // Boshlang'ich harakat (xato bo'lsa — e'tiborsiz)
+  await run(
+    supabase.from('harakatlar').insert({
+      buyurtma_id: newRow.id,
+      amal:        'Buyurtma yaratildi',
+      muallif_id:  userId,
+    })
+  ).catch(() => {});
 
   return dbToApp(newRow);
 }
@@ -178,52 +188,44 @@ export async function update(id, changes) {
   const dbChanges = appToDb(changes);
   dbChanges.yangilangan_vaqt = new Date().toISOString();
 
-  // Agar yuvuvchi o'rnatilsa → yuvuvchi_id = joriy foydalanuvchi UUID
   if ('yuvuvchi' in changes) {
     const userId = await getCurrentUserId();
     dbChanges.yuvuvchi_id = userId;
   }
 
-  const { error } = await supabase
-    .from('buyurtmalar')
-    .update(dbChanges)
-    .eq('id', id);
-
+  const { error } = await run(
+    supabase.from('buyurtmalar').update(dbChanges).eq('id', id)
+  );
   if (error) throw error;
 }
 
 // ── Izoh qo'shish ─────────────────────────────────────
-export async function addIzoh(orderId, matn, _muallif) {
+export async function addIzoh(orderId, matn) {
   const userId = await getCurrentUserId();
-  const { error } = await supabase.from('izohlar').insert({
-    buyurtma_id: orderId,
-    matn,
-    muallif_id:  userId,
-  });
+  const { error } = await run(
+    supabase.from('izohlar').insert({ buyurtma_id: orderId, matn, muallif_id: userId })
+  );
   if (error) throw error;
 }
 
 // ── Harakat qo'shish (tarix) ─────────────────────────
-export async function addHarakat(orderId, amal, _muallif) {
+export async function addHarakat(orderId, amal) {
   const userId = await getCurrentUserId();
-  const { error } = await supabase.from('harakatlar').insert({
-    buyurtma_id: orderId,
-    amal,
-    muallif_id:  userId,
-  });
+  const { error } = await run(
+    supabase.from('harakatlar').insert({ buyurtma_id: orderId, amal, muallif_id: userId })
+  );
   if (error) throw error;
 }
 
 // ── O'chirish ─────────────────────────────────────────
 export async function remove(id) {
-  const { error } = await supabase
-    .from('buyurtmalar')
-    .delete()
-    .eq('id', id);
+  const { error } = await run(
+    supabase.from('buyurtmalar').delete().eq('id', id)
+  );
   if (error) throw error;
 }
 
-// ── Qidiruv (sinxron — yuklangan orders massividan) ───
+// ── Qidiruv (sinxron) ────────────────────────────────
 export function search(query, orders = []) {
   if (!query?.trim()) return orders;
   const q = query.toLowerCase();
@@ -234,7 +236,7 @@ export function search(query, orders = []) {
   );
 }
 
-// ── Statistika (sinxron — berilgan orders dan) ────────
+// ── Statistika (sinxron) ─────────────────────────────
 export function computeStats(orders = [], period = 'kun', specificDate = null) {
   const now    = new Date();
   const tugadi = orders.filter(o => o.status === 'tugadi');
@@ -275,11 +277,8 @@ export function computeStats(orders = [], period = 'kun', specificDate = null) {
   };
 }
 
-// Eski nom mosligi uchun (getStats → computeStats)
 export const getStats = computeStats;
 
-// Rasm izoh — hozircha Storage sozlanmagan, keyinga qoldirildi
-export async function addIzohRasm(orderId, _base64, _muallif, _manba) {
-  console.warn('addIzohRasm: Supabase Storage hali sozlanmagan — rasm saqlanmadi.');
-  // Kelajakda: Supabase Storage ga yuklash va URL ni izohlar jadvaliga saqlash
+export async function addIzohRasm() {
+  console.warn('addIzohRasm: Storage hali sozlanmagan.');
 }
