@@ -1,0 +1,256 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { RoleProvider, useRole } from './context/RoleContext';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
+import { supabase } from './lib/supabaseClient';
+import Header from './components/Header';
+import Footer from './components/Footer';
+import Orders from './pages/Orders';
+import NewOrder from './pages/NewOrder';
+import Debt from './pages/Debt';
+import History from './pages/History';
+import Cancelled from './pages/Cancelled';
+import Customers from './pages/Customers';
+import Statistics from './pages/Statistics';
+import Login from './pages/Login';
+import OrderModal from './components/OrderModal';
+import { getAll, search } from './services/orders';
+
+// ── 10 soniyalik timeout ────────────────────────────────
+async function withTimeout(promise, ms = 10000) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('timeout')), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+}
+
+// ── Ulanish holati banneri ──────────────────────────────
+function ConnectionBanner({ online, justReconnected }) {
+  if (justReconnected) {
+    return (
+      <div className="fixed top-0 inset-x-0 z-[200] max-w-[480px] mx-auto pointer-events-none">
+        <div className="bg-green-500 text-white text-center text-sm font-semibold py-2 shadow-lg">
+          ✅ Internet tiklandi — ulandi
+        </div>
+      </div>
+    );
+  }
+  if (!online) {
+    return (
+      <div className="fixed top-0 inset-x-0 z-[200] max-w-[480px] mx-auto pointer-events-none">
+        <div className="bg-yellow-500 text-white text-center text-sm font-semibold py-2 shadow-lg animate-pulse">
+          ⚠️ Ulanish yo'q — qayta ulanmoqda...
+        </div>
+      </div>
+    );
+  }
+  return null;
+}
+
+// ── Sessiya yuklanmoqda ─────────────────────────────────
+function LoadingScreen() {
+  const { dark } = useTheme();
+  return (
+    <div className={`min-h-screen flex items-center justify-center ${dark ? 'bg-black' : 'bg-gray-50'}`}>
+      <div className="text-center">
+        <div className="text-4xl mb-3">🧹</div>
+        <div className={`text-sm font-medium ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
+          Yuklanmoqda...
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Asosiy ilova ────────────────────────────────────────
+function AppContent() {
+  const { role, loading } = useRole();
+  const { dark } = useTheme();
+
+  const [orders,          setOrders]          = useState([]);
+  const [ordersLoading,   setOrdersLoading]   = useState(false);
+  const [ordersError,     setOrdersError]     = useState(null);
+  const [searchQuery,     setSearchQuery]     = useState('');
+  const [selectedOrder,   setSelectedOrder]   = useState(null);
+  const [online,          setOnline]          = useState(navigator.onLine);
+  const [justReconnected, setJustReconnected] = useState(false);
+
+  const navigate        = useNavigate();
+  const channelRef      = useRef(null);
+  const reconnTimerRef  = useRef(null);
+
+  // ── Ma'lumot yuklash: timeout 10s + 1 marta avtomatik retry ──
+  const refresh = useCallback(async () => {
+    try {
+      const all = await withTimeout(getAll());
+      setOrders(all);
+      setOrdersError(null);
+    } catch {
+      // Birinchi urinish muvaffaqiyatsiz — bir marta qayta urish
+      try {
+        const all = await withTimeout(getAll());
+        setOrders(all);
+        setOrdersError(null);
+      } catch {
+        setOrdersError('Ulanish xatosi, qayta urining');
+      }
+    }
+  }, []);
+
+  // ── Realtime kanalini (qayta) sozlash ────────────────
+  const setupChannel = useCallback(() => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    try {
+      channelRef.current = supabase
+        .channel('buyurtmalar-realtime')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'buyurtmalar' },
+          () => { refresh(); }
+        )
+        .subscribe();
+    } catch (err) {
+      console.warn('Real-time ulanmadi:', err);
+    }
+  }, [refresh]);
+
+  // ── Ilk yuklash + realtime ────────────────────────────
+  useEffect(() => {
+    if (!role) return;
+
+    setOrdersLoading(true);
+    refresh().finally(() => setOrdersLoading(false));
+    setupChannel();
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [role, refresh, setupChannel]);
+
+  // ── Internet holati kuzatish + avtomatik qayta ulanish ─
+  useEffect(() => {
+    const goOnline = () => {
+      setOnline(true);
+      setJustReconnected(true);
+
+      // Ma'lumotlarni yangilash + realtime qayta ulash
+      refresh();
+      if (channelRef.current !== null) {
+        // Foydalanuvchi login qilgan edi — kanalni yangilash
+        setupChannel();
+      }
+
+      // "Ulandi" banneri 3 soniyadan keyin yo'qoladi
+      clearTimeout(reconnTimerRef.current);
+      reconnTimerRef.current = setTimeout(() => setJustReconnected(false), 3000);
+    };
+
+    const goOffline = () => {
+      setOnline(false);
+      setJustReconnected(false);
+      clearTimeout(reconnTimerRef.current);
+    };
+
+    window.addEventListener('online',  goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online',  goOnline);
+      window.removeEventListener('offline', goOffline);
+      clearTimeout(reconnTimerRef.current);
+    };
+  }, [refresh, setupChannel]);
+
+  if (loading) return <LoadingScreen />;
+  if (!role)   return <Login />;
+
+  const searchResults = search(searchQuery, orders);
+
+  const handleSelectOrder = (order) => {
+    setSearchQuery('');
+    setSelectedOrder(order);
+  };
+
+  return (
+    <div className={`flex flex-col min-h-screen ${dark ? 'bg-black' : 'bg-[#f1f2f6]'}`}>
+
+      <ConnectionBanner online={online} justReconnected={justReconnected} />
+
+      <Header
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onNewOrder={() => navigate('/yangi')}
+        onSelectOrder={handleSelectOrder}
+        searchResults={searchResults}
+      />
+
+      <main className="flex-1 pb-20">
+
+        {/* Tarmoq xatosi banneri */}
+        {ordersError && (
+          <div className="mx-4 mt-4 p-3 rounded-xl bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+            <span className="text-sm text-red-600 flex-1">⚠️ {ordersError}</span>
+            <button
+              onClick={() => { setOrdersError(null); setOrdersLoading(true); refresh().finally(() => setOrdersLoading(false)); }}
+              className="text-xs font-bold text-red-600 px-3 py-1.5 rounded-lg bg-red-100 active:scale-95 transition-all flex-shrink-0"
+            >
+              Qayta urinish
+            </button>
+          </div>
+        )}
+
+        {/* Yuklanmoqda — yupqa chiziq */}
+        {ordersLoading && (
+          <div className="h-0.5 bg-blue-500 animate-pulse w-full" />
+        )}
+
+        <Routes>
+          <Route path="/" element={
+            <Orders orders={orders} onDetail={setSelectedOrder} onRefresh={refresh} />
+          } />
+          <Route path="/yangi" element={
+            <NewOrder onCreated={() => { refresh(); navigate('/'); }} />
+          } />
+          <Route path="/qarz"       element={<Debt       orders={orders} onRefresh={refresh} />} />
+          <Route path="/tarix"      element={<History    orders={orders} />} />
+          <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
+          <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
+          <Route path="/statistika" element={<Statistics orders={orders} />} />
+        </Routes>
+      </main>
+
+      <Footer orders={orders} />
+
+      {selectedOrder && (
+        <OrderModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          onRefresh={refresh}
+        />
+      )}
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ThemeProvider>
+        <RoleProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </RoleProvider>
+      </ThemeProvider>
+    </BrowserRouter>
+  );
+}
