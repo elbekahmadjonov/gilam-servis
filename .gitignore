@@ -17,6 +17,12 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Android build artifacts (source fayllari saqlanadi, faqat build o'chiriladi)
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
