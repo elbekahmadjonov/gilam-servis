@@ -38,15 +38,25 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
 
   const doUpdate = async (changes, amal) => {
     const snapshot = order;
-    // Optimistik yangilanish — server javobini kutmasdan UI darhol o'zgaradi
+    // Status haqiqatan o'zgarяptimi?
+    const statusOzgardi = 'status' in changes && changes.status !== snapshot.status;
+
+    // Optimistik yangilanish
     setOrder(prev => ({ ...prev, ...changes }));
     setSaving(true);
     try {
       await orderService.update(snapshot.id, changes);
       if (amal) await orderService.addHarakat(snapshot.id, amal, role);
-      await refresh();
+
+      if (statusOzgardi) {
+        // Status o'zgarganda → modalni yopish, ro'yxatni yangilash
+        if (onRefresh) onRefresh();
+        onClose();
+      } else {
+        // Bosqich / izoh o'zgarganda → modal ochiq, faqat ichini yangilash
+        await refresh();
+      }
     } catch (err) {
-      // Xato bo'lsa — avvalgi holatga qaytarish
       setOrder(snapshot);
       console.error('Yangilash xatosi:', err);
       showToast('Saqlashda xatolik yuz berdi', 'error');
@@ -98,12 +108,12 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
 
   const handleBekorQilish = async () => {
     if (!bekorSabab.trim()) return;
+    setShowBekor(false);
     await doUpdate(
       { status: 'otkaz', otkazSababi: bekorSabab },
       `Bekor qilindi: ${bekorSabab}`
     );
-    setShowBekor(false);
-    onClose();
+    // doUpdate status o'zgarishini aniqlaydi va modalni o'zi yopadi
   };
 
   const handleTahrir = async (data) => {
@@ -391,13 +401,13 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
           order={order} dark={dark}
           onClose={() => setShowTolovOyna(false)}
           onSave={async (tolovMa) => {
+            setShowTolovOyna(false);
             await doUpdate({
               ...tolovMa,
               status: 'tugadi',
               bosqich: { ...order.bosqich, yetkazildi: true },
             }, 'Yetkazildi → Tugadi');
-            setShowTolovOyna(false);
-            onClose();
+            // doUpdate status o'zgarishini aniqlaydi va modalni o'zi yopadi
           }}
         />
       )}
