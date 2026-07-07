@@ -11,6 +11,8 @@ function capitalizeRole(rol) {
 
 const RoleContext = createContext(null);
 
+const DEFAULT_XODIM = { id: null, ism: 'Admin', login: 'admin', rol: 'Admin' };
+
 export function RoleProvider({ children }) {
   const [xodim,     setXodim]     = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -65,12 +67,14 @@ export function RoleProvider({ children }) {
       if (session?.user) {
         const x = await loadXodim(session.user.id);
         console.log('[Auth] xodim:', x ? `ism=${x.ism}, rol=${x.rol}` : 'DB da topilmadi');
-        setXodim(x);
+        setXodim(x ?? DEFAULT_XODIM);
+      } else {
+        setXodim(DEFAULT_XODIM);
       }
     } catch (err) {
       clearTimeout(timerRef.current);
       console.error('[Auth] getSession istisno:', err);
-      setAuthError(`Ulanish xatosi: ${err.message || 'noma\'lum'}`);
+      setXodim(DEFAULT_XODIM);
     } finally {
       setLoading(false);
     }
@@ -84,7 +88,7 @@ export function RoleProvider({ children }) {
       async (event, session) => {
         console.log('[Auth] onAuthStateChange:', event);
         if (event === 'SIGNED_OUT' || !session) {
-          setXodim(null);
+          setXodim(DEFAULT_XODIM);
         } else if (session?.user) {
           const x = await loadXodim(session.user.id);
           setXodim(x);

@@ -13,7 +13,6 @@ import History from './pages/History';
 import Cancelled from './pages/Cancelled';
 import Customers from './pages/Customers';
 import Statistics from './pages/Statistics';
-import Login from './pages/Login';
 import OrderModal from './components/OrderModal';
 import { getAll, search, hasCachedOrders, invalidateCache } from './services/orders';
 
@@ -201,8 +200,7 @@ function AppContent() {
     };
   }, [refresh, setupChannel]);
 
-  if (loading || authError) return <LoadingScreen authError={authError} onRetry={retryInit} />;
-  if (!role)                return <Login />;
+  if (loading) return <LoadingScreen authError={authError} onRetry={retryInit} />;
 
   const searchResults = search(searchQuery, orders);
 
