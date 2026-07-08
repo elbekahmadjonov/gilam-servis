@@ -1,53 +1,54 @@
-// templates.js — Narx shablonlari (localStorage)
-// Har mahsulot turi uchun narx chiplari ro'yxati saqlanadi
+// templates.js — Narx shablonlari (endi tenant-scoped backend API).
+// Komponentlar sinxron ishlashda davom etishi uchun in-memory kesh ishlatiladi:
+//   loadTemplates() bir marta serverdan yuklaydi (kesh),
+//   getTemplates(type) keshdan sinxron o'qiydi,
+//   add/remove optimistik (kesh darhol yangilanadi) + API'ga yoziladi.
 
-const KEY = 'gilam_price_templates_v2';
+import { api } from '../lib/api';
 
-function getAll() {
-  try { return JSON.parse(localStorage.getItem(KEY) || '{}'); }
-  catch { return {}; }
+let cache = {};      // { turi: number[] }
+let loaded = false;
+
+// Serverdan barcha shablonlarni yuklaydi (guruhlangan)
+export async function loadTemplates() {
+  try {
+    cache = (await api.get('/templates')) || {};
+    loaded = true;
+  } catch (err) {
+    console.warn('[templates] yuklab bo\'lmadi:', err.message);
+  }
+  return cache;
 }
 
-function saveAll(data) {
-  localStorage.setItem(KEY, JSON.stringify(data));
+export function templatesLoaded() {
+  return loaded;
 }
 
-/**
- * Berilgan tur uchun saqlangan narxlar ro'yxatini qaytaradi
- * type: 'gilam' | 'odeal' | 'korpa' | 'parda' | 'korpacha'
- * @returns {number[]}
- */
 export function getTemplates(type) {
-  const all = getAll();
-  return Array.isArray(all[type]) ? all[type] : [];
+  return Array.isArray(cache[type]) ? cache[type] : [];
 }
 
-/**
- * Narxni chip sifatida qo'shadi (takroriy bo'lsa qo'shilmaydi)
- */
+export function getAllTemplates() {
+  return cache;
+}
+
+// Narx qo'shish — optimistik kesh + server
 export function addTemplate(type, narx) {
   const val = parseFloat(narx);
   if (!val || val <= 0) return;
-  const all = getAll();
-  const arr = Array.isArray(all[type]) ? all[type] : [];
+  const arr = Array.isArray(cache[type]) ? cache[type] : [];
   if (!arr.includes(val)) {
-    all[type] = [...arr, val];
-    saveAll(all);
+    cache = { ...cache, [type]: [...arr, val].sort((a, b) => a - b) };
+    api.post('/templates', { turi: type, narx: val }).catch((e) =>
+      console.warn('[templates] qo\'shish xato:', e.message)
+    );
   }
 }
 
-/**
- * Berilgan narxni chip ro'yxatidan o'chiradi
- */
+// Narx o'chirish — optimistik kesh + server
 export function removeTemplate(type, narx) {
   const val = parseFloat(narx);
-  const all = getAll();
-  const arr = Array.isArray(all[type]) ? all[type] : [];
-  all[type] = arr.filter(v => v !== val);
-  saveAll(all);
-}
-
-// Barcha shablonlarni olish (tashqi foydalanish uchun)
-export function getAllTemplates() {
-  return getAll();
+  const arr = Array.isArray(cache[type]) ? cache[type] : [];
+  cache = { ...cache, [type]: arr.filter((v) => v !== val) };
+  api.del('/templates', { turi: type, narx: val }).catch(() => {});
 }

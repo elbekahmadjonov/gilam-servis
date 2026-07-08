@@ -1,0 +1,72 @@
+# Gilam Servis — production stack (elbek-vps, Supabase'siz)
+#   db    → PostgreSQL 16
+#   api   → Express + Socket.io backend   (gilamapi.qariya.uz)
+#   caddy → web static + reverse proxy + avtomatik HTTPS (gilam.qariya.uz)
+#
+# Ishga tushirish (serverda):
+#   cp .env.docker.example .env    va qiymatlarni to'ldiring
+#   docker compose up -d --build
+#   docker compose exec api npm run migrate
+#   docker compose exec api npm run seed
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER:-gilam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gilam_parol}
+      POSTGRES_DB:       ${POSTGRES_DB:-gilam}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-gilam}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./server
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-gilam}:${POSTGRES_PASSWORD:-gilam_parol}@db:5432/${POSTGRES_DB:-gilam}
+      JWT_SECRET:   ${JWT_SECRET:?JWT_SECRET .env da belgilang}
+      JWT_EXPIRES:  ${JWT_EXPIRES:-30d}
+      PORT:         3000
+      CORS_ORIGIN:  ${CORS_ORIGIN:-https://gilam.qariya.uz,https://gilamadmin.qariya.uz}
+      WEB_BASE:     ${WEB_BASE:-https://gilam.qariya.uz}
+      TELEGRAM_MAX_AGE_SEC: ${TELEGRAM_MAX_AGE_SEC:-86400}
+      SUPER_LOGIN:  ${SUPER_LOGIN:-super}
+      SUPER_PAROL:  ${SUPER_PAROL:?SUPER_PAROL .env da belgilang}
+      ADMIN_LOGIN:  ${ADMIN_LOGIN:-admin}
+      ADMIN_PAROL:  ${ADMIN_PAROL:-admin123}
+    expose:
+      - "3000"
+
+  caddy:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+      args:
+        VITE_API_URL:    ${VITE_API_URL:-https://gilamapi.qariya.uz/api}
+        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-https://gilamapi.qariya.uz}
+        VITE_WEB_BASE:   ${VITE_WEB_BASE:-https://gilam.qariya.uz}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

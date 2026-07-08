@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
-import { supabase } from './lib/supabaseClient';
+import { socket, connectSocket, disconnectSocket } from './lib/socket';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Orders from './pages/Orders';
@@ -16,6 +16,7 @@ import Statistics from './pages/Statistics';
 import Login from './pages/Login';
 import OrderModal from './components/OrderModal';
 import { getAll, search, hasCachedOrders, invalidateCache } from './services/orders';
+import { loadTemplates } from './services/templates';
 
 // ── 10 soniyalik timeout ────────────────────────────────
 async function withTimeout(promise, ms = 10000) {
@@ -84,9 +85,25 @@ function LoadingScreen({ authError, onRetry }) {
   );
 }
 
+// ── Tenant to'xtatilgan / muddati tugagan ekrani ───────
+function BlockedScreen() {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center p-8 gap-4 bg-gray-50 dark:bg-black">
+      <div className="text-5xl">⛔</div>
+      <p className="text-base font-extrabold text-center text-gray-800 dark:text-gray-200">
+        Obuna faol emas
+      </p>
+      <p className="text-sm text-center max-w-xs text-gray-500 dark:text-gray-400">
+        Ushbu xizmat vaqtincha to'xtatilgan yoki obuna muddati tugagan.
+        Iltimos, administrator bilan bog'laning.
+      </p>
+    </div>
+  );
+}
+
 // ── Asosiy ilova ────────────────────────────────────────
 function AppContent() {
-  const { role, loading, authError, retryInit } = useRole();
+  const { role, loading, authError, blocked, retryInit } = useRole();
   const { dark } = useTheme();
 
   const [orders,          setOrders]          = useState([]);
@@ -128,24 +145,18 @@ function AppContent() {
     }
   }, [refresh]);
 
-  // ── Realtime kanalini (qayta) sozlash ────────────────
+  // ── Realtime (Socket.io) kanalini (qayta) sozlash ────
   const setupChannel = useCallback(() => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
+    const onChange = () => {
+      invalidateCache(); // real-time o'zgarish — keshni tozala
+      refresh();
+    };
     try {
-      channelRef.current = supabase
-        .channel('buyurtmalar-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'buyurtmalar' },
-          () => {
-            invalidateCache(); // real-time o'zgarish — keshni tozala
-            refresh();
-          }
-        )
-        .subscribe();
+      // Eski listener bo'lsa olib tashlaymiz (takrorlanmasligi uchun)
+      socket.off('orders:changed', channelRef.current);
+      channelRef.current = onChange;
+      socket.on('orders:changed', onChange);
+      connectSocket();
     } catch (err) {
       console.warn('Real-time ulanmadi:', err);
     }
@@ -158,13 +169,15 @@ function AppContent() {
     // Kesh mavjud bo'lsa — spinner ko'rsatma (ma'lumot darhol chiqadi)
     if (!hasCachedOrders()) setOrdersLoading(true);
     refresh().finally(() => setOrdersLoading(false));
+    loadTemplates();   // narx shablonlarini tenant bo'yicha yuklaymiz
     setupChannel();
 
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        socket.off('orders:changed', channelRef.current);
         channelRef.current = null;
       }
+      disconnectSocket();
     };
   }, [role, refresh, setupChannel]);
 
@@ -201,6 +214,7 @@ function AppContent() {
     };
   }, [refresh, setupChannel]);
 
+  if (blocked)              return <BlockedScreen />;
   if (loading || authError) return <LoadingScreen authError={authError} onRetry={retryInit} />;
   if (!role)                return <Login />;
 

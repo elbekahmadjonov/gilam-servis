@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { formatSum } from '../utils/formatlash';
-import { getTemplates, addTemplate, removeTemplate } from '../services/templates';
+import { getTemplates, addTemplate, removeTemplate, loadTemplates } from '../services/templates';
 
 // ============================================================
 // Yordamchi komponentlar — TASHQARIDA (keyboard bug oldini olish)
@@ -157,13 +157,20 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
   const [xatoList,    setXatoList]    = useState([]);
 
   // Har tur uchun chiplar ro'yxati (number[])
-  const [templates, setTemplates] = useState(() => ({
+  const readAll = () => ({
     gilam:    getTemplates('gilam'),
     odeal:    getTemplates('odeal'),
     korpa:    getTemplates('korpa'),
     parda:    getTemplates('parda'),
     korpacha: getTemplates('korpacha'),
-  }));
+  });
+  const [templates, setTemplates] = useState(readAll);
+
+  // Oyna ochilganda shablonlarni serverdan yangilaymiz (kesh eskirsa)
+  useEffect(() => {
+    loadTemplates().then(() => setTemplates(readAll()));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Chip qo'shish (+ Qo'shish bosilganda)
   const addChip = (type, value) => {

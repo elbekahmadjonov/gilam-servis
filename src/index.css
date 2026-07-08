@@ -20,6 +20,12 @@ body {
   position: relative;
 }
 
+/* Super Admin panel (gilamadmin) — desktop, kenglik cheklovisiz */
+body.super {
+  max-width: none;
+  margin: 0;
+}
+
 #root {
   min-height: 100vh;
   display: flex;
