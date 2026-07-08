@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { RoleProvider, useRole } from './context/RoleContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
-import { supabase } from './lib/supabaseClient';
+import { socket, connectSocket, disconnectSocket } from './lib/socket';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Orders from './pages/Orders';
@@ -128,24 +128,18 @@ function AppContent() {
     }
   }, [refresh]);
 
-  // ── Realtime kanalini (qayta) sozlash ────────────────
+  // ── Realtime (Socket.io) kanalini (qayta) sozlash ────
   const setupChannel = useCallback(() => {
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current);
-      channelRef.current = null;
-    }
+    const onChange = () => {
+      invalidateCache(); // real-time o'zgarish — keshni tozala
+      refresh();
+    };
     try {
-      channelRef.current = supabase
-        .channel('buyurtmalar-realtime')
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'buyurtmalar' },
-          () => {
-            invalidateCache(); // real-time o'zgarish — keshni tozala
-            refresh();
-          }
-        )
-        .subscribe();
+      // Eski listener bo'lsa olib tashlaymiz (takrorlanmasligi uchun)
+      socket.off('orders:changed', channelRef.current);
+      channelRef.current = onChange;
+      socket.on('orders:changed', onChange);
+      connectSocket();
     } catch (err) {
       console.warn('Real-time ulanmadi:', err);
     }
@@ -162,9 +156,10 @@ function AppContent() {
 
     return () => {
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        socket.off('orders:changed', channelRef.current);
         channelRef.current = null;
       }
+      disconnectSocket();
     };
   }, [role, refresh, setupChannel]);
 

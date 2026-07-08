@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { api, setToken, getToken } from '../lib/api';
+import { disconnectSocket } from '../lib/socket';
+import { isTelegram, getInitData, initTelegram } from '../lib/telegram';
 
-const EMAIL_DOMAIN   = '@gilamservis.uz';
 const SESSION_TIMEOUT = 15000; // 15 soniya — undan keyin xato
 
 function capitalizeRole(rol) {
@@ -17,60 +18,50 @@ export function RoleProvider({ children }) {
   const [authError, setAuthError] = useState(null);
   const timerRef = useRef(null);
 
-  const loadXodim = async (userId) => {
-    const { data, error } = await supabase
-      .from('xodimlar')
-      .select('id, ism, login, rol')
-      .eq('id', userId)
-      .single();
-    if (error || !data) {
-      console.warn('[Auth] loadXodim topilmadi:', error?.message);
-      return null;
-    }
-    return { ...data, rol: capitalizeRole(data.rol) };
-  };
-
-  // ── Sessiyani yuklash (timeout + debug log) ──────────
+  // ── Sessiyani yuklash (saqlangan token orqali) ───────
   const initSession = useCallback(async () => {
     clearTimeout(timerRef.current);
     setLoading(true);
     setAuthError(null);
 
+    // Token yo'q — lekin Telegram ichida bo'lsak, avtomatik kirishga urinamiz
+    if (!getToken()) {
+      if (isTelegram()) {
+        try {
+          const { token, xodim: x } = await api.post('/auth/telegram', {
+            initData: getInitData(),
+          });
+          setToken(token);
+          setXodim({ ...x, rol: capitalizeRole(x.rol) });
+          setLoading(false);
+          return;
+        } catch {
+          // 403 not_linked yoki xato — login/parol sahifasiga o'tamiz
+        }
+      }
+      setXodim(null);
+      setLoading(false);
+      return;
+    }
+
     // 15 soniyadan javob kelmasa — xato holati
     timerRef.current = setTimeout(() => {
-      console.warn('[Auth] ⏱ getSession 15s timeout — loading to\'xtatildi');
+      console.warn('[Auth] ⏱ /me 15s timeout — loading to\'xtatildi');
       setLoading(false);
-      setAuthError('Supabase ulanishi vaqt tugadi. Internetni tekshiring.');
+      setAuthError('Server ulanishi vaqt tugadi. Internetni tekshiring.');
     }, SESSION_TIMEOUT);
 
     try {
-      console.log('[Auth] getSession so\'rovi yuborildi...');
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const data = await api.get('/auth/me');
       clearTimeout(timerRef.current);
-
-      // USB debugging uchun
-      console.log('[Auth] getSession natija:',
-        session
-          ? `user=${session.user.id.slice(0, 8)}... email=${session.user.email}`
-          : 'sessiya yo\'q',
-        error ? `XATO: ${error.message}` : 'OK'
-      );
-
-      if (error) {
-        setAuthError(`Sessiya xatosi: ${error.message}`);
-        setLoading(false);
-        return;
-      }
-
-      if (session?.user) {
-        const x = await loadXodim(session.user.id);
-        console.log('[Auth] xodim:', x ? `ism=${x.ism}, rol=${x.rol}` : 'DB da topilmadi');
-        setXodim(x);
-      }
+      setXodim({ ...data, rol: capitalizeRole(data.rol) });
     } catch (err) {
       clearTimeout(timerRef.current);
-      console.error('[Auth] getSession istisno:', err);
-      setAuthError(`Ulanish xatosi: ${err.message || 'noma\'lum'}`);
+      // Token yaroqsiz bo'lsa api.js uni allaqachon tozalagan
+      console.warn('[Auth] /me xato:', err.message);
+      setXodim(null);
+      // 401 emas, tarmoq xatosi bo'lsa — foydalanuvchiga ko'rsatamiz
+      if (getToken()) setAuthError(`Ulanish xatosi: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -78,41 +69,31 @@ export function RoleProvider({ children }) {
 
   // ── Ilk yuklash ───────────────────────────────────────
   useEffect(() => {
+    initTelegram();  // Mini App'ni yoyish + ready signal
     initSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('[Auth] onAuthStateChange:', event);
-        if (event === 'SIGNED_OUT' || !session) {
-          setXodim(null);
-        } else if (session?.user) {
-          const x = await loadXodim(session.user.id);
-          setXodim(x);
-        }
-      }
-    );
-
-    return () => {
-      clearTimeout(timerRef.current);
-      subscription.unsubscribe();
-    };
+    return () => clearTimeout(timerRef.current);
   }, [initSession]);
 
   // ── Login ─────────────────────────────────────────────
+  // Telegram ichida bo'lsak initData ham yuboriladi — backend shu xodimni
+  // Telegram akkauntiga bog'laydi (keyingi safar avtomatik kirish uchun).
   const login = async (loginStr, parol) => {
-    const email = loginStr.trim() + EMAIL_DOMAIN;
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password: parol });
-    if (error) throw error;
-    const x = await loadXodim(data.user.id);
-    if (!x) throw new Error('Xodim topilmadi');
-    setXodim(x);
+    const { token, xodim: x } = await api.post('/auth/login', {
+      login: loginStr.trim(),
+      parol,
+      ...(isTelegram() ? { initData: getInitData() } : {}),
+    });
+    setToken(token);
+    const shaped = { ...x, rol: capitalizeRole(x.rol) };
+    setXodim(shaped);
     setAuthError(null);
-    return x;
+    return shaped;
   };
 
   // ── Logout ────────────────────────────────────────────
   const logout = async () => {
-    await supabase.auth.signOut();
+    setToken(null);
+    disconnectSocket();
     setXodim(null);
   };
 

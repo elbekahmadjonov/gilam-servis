@@ -1,35 +1,12 @@
-import { supabase } from '../lib/supabaseClient';
+import { api } from '../lib/api';
 
-// ── Memory cache — Frankfurt pingini yashiradi ────────
+// ── Memory cache — tarmoq pingini yashiradi ───────────
 let ordersCache = null;
 let lastFetch   = 0;
 const CACHE_TTL = 60000; // 60 soniya
 
 export function hasCachedOrders() { return ordersCache !== null; }
 export function invalidateCache() { ordersCache = null; lastFetch = 0; }
-
-// ── Har bir Supabase so'roviga 10s timeout ────────────
-const TIMEOUT_MS = 10000;
-
-async function run(query) {
-  let timerId;
-  const timeout = new Promise((_, reject) => {
-    timerId = setTimeout(
-      () => reject(new Error("So'rov vaqti tugadi (10s)")),
-      TIMEOUT_MS
-    );
-  });
-  try {
-    return await Promise.race([query, timeout]);
-  } finally {
-    clearTimeout(timerId);
-  }
-}
-
-async function getCurrentUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
-}
 
 // ── DB (snake_case) → App (camelCase) ───────────────
 function dbToApp(row, izohlar = [], harakatlar = []) {
@@ -74,169 +51,71 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
   };
 }
 
-// ── App (camelCase) → DB (snake_case) ───────────────
-function appToDb(changes) {
-  const db = {};
-  const map = {
-    mijozIsmi:    'mijoz_ismi',
-    telefon:      'telefon',
-    manzil:       'manzil',
-    izoh:         'izoh',
-    status:       'status',
-    bosqich:      'bosqich',
-    tovarlar:     'tovarlar',
-    narxlar:      'narxlar',
-    umumiyHisob:  'umumiy_hisob',
-    chegirma:     'chegirma',
-    yakuniySumma: 'yakuniy_summa',
-    tolov:        'tolov',
-    qarz:         'qarz',
-    otkazSababi:  'otkaz_sababi',
-    lat:          'lat',
-    lng:          'lng',
-    yuvuvchiId:   'yuvuvchi_id',
-  };
-  for (const [appKey, dbKey] of Object.entries(map)) {
-    if (appKey in changes) db[dbKey] = changes[appKey];
-  }
-  return db;
-}
-
 function capitalize(s) {
   if (!s) return null;
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-const LIST_SELECT = '*, yuvuvchi:xodimlar!yuvuvchi_id(ism, rol)';
-
 // ── Ro'yxat (kesh bilan) ─────────────────────────────
 export async function getAll() {
-  // Kesh yangi bo'lsa — darhol qaytар (0 ms)
+  // Kesh yangi bo'lsa — darhol qaytar (0 ms)
   if (ordersCache && Date.now() - lastFetch < CACHE_TTL) {
     return ordersCache;
   }
-  const { data, error } = await run(
-    supabase.from('buyurtmalar').select(LIST_SELECT).order('id', { ascending: false })
-  );
-  if (error) {
-    console.error('[orders] getAll xato:', error.message);
-    return ordersCache || []; // xato bo'lsa eski keshni qaytар
+  try {
+    const data = await api.get('/orders');
+    ordersCache = (data || []).map(row => dbToApp(row));
+    lastFetch   = Date.now();
+    return ordersCache;
+  } catch (err) {
+    console.error('[orders] getAll xato:', err.message);
+    return ordersCache || []; // xato bo'lsa eski keshni qaytar
   }
-  ordersCache = (data || []).map(row => dbToApp(row));
-  lastFetch   = Date.now();
-  return ordersCache;
 }
 
-// ── Bitta buyurtma (izohlar + harakatlar parallel) ───
+// ── Bitta buyurtma (izohlar + harakatlar backend'da qo'shilgan) ──
 export async function getById(id) {
-  const { data: row, error } = await run(
-    supabase.from('buyurtmalar').select(LIST_SELECT).eq('id', id).single()
-  );
-  if (error) return null;
-
-  // Izohlar va harakatlar parallel yuklanadi
-  const [izohRes, harakatRes] = await Promise.all([
-    run(
-      supabase.from('izohlar')
-        .select('*, muallif:xodimlar!muallif_id(ism, rol)')
-        .eq('buyurtma_id', id)
-        .order('vaqt', { ascending: true })
-    ),
-    run(
-      supabase.from('harakatlar')
-        .select('*, muallif:xodimlar!muallif_id(ism, rol)')
-        .eq('buyurtma_id', id)
-        .order('vaqt', { ascending: true })
-    ),
-  ]);
-
-  return dbToApp(row, izohRes.data || [], harakatRes.data || []);
+  try {
+    const res = await api.get(`/orders/${id}`);
+    return dbToApp(res, res.izohlar || [], res.harakatlar || []);
+  } catch {
+    return null;
+  }
 }
 
 // ── Yaratish ─────────────────────────────────────────
 export async function create(data) {
-  const userId = await getCurrentUserId();
-
-  const { data: newRow, error } = await run(
-    supabase.from('buyurtmalar').insert({
-      mijoz_ismi:    data.mijozIsmi  || '',
-      telefon:       data.telefon    || '',
-      manzil:        data.manzil     || '',
-      izoh:          data.izoh       || '',
-      status:        'yangi',
-      bosqich:       { oldim: false, qabulQildim: false, yuvyapman: false,
-                       yakunladi: false, qadoqlayapman: false, qadoqlandi: false,
-                       olibKetdim: false, yetkazildi: false },
-      tovarlar:      { gilamSoni: 0, odealSoni: 0, korpaSoni: 0, korpachaSoni: 0, pardaBor: false },
-      narxlar:       { gilamlar: [], odeal: { narx: 0 }, korpa: { narx: 0 },
-                       parda: { kg: 0, narxKg: 0, jami: 0 },
-                       korpacha: { metr: 0, narxMetr: 0, jami: 0 } },
-      umumiy_hisob:  0,
-      chegirma:      0,
-      yakuniy_summa: 0,
-      tolov:         { turi: null, naqd: 0, karta: 0 },
-      qarz:          0,
-      otkaz_sababi:  '',
-      yaratgan_id:   userId,
-    }).select().single()
-  );
-
-  if (error) throw error;
-
-  // Boshlang'ich harakat (xato bo'lsa — e'tiborsiz)
-  await run(
-    supabase.from('harakatlar').insert({
-      buyurtma_id: newRow.id,
-      amal:        'Buyurtma yaratildi',
-      muallif_id:  userId,
-    })
-  ).catch(() => {});
-
+  const newRow = await api.post('/orders', {
+    mijozIsmi: data.mijozIsmi || '',
+    telefon:   data.telefon   || '',
+    manzil:    data.manzil    || '',
+    izoh:      data.izoh      || '',
+  });
   invalidateCache();
   return dbToApp(newRow);
 }
 
 // ── Yangilash ─────────────────────────────────────────
+// changes camelCase yuboriladi; backend snake_case'ga o'giradi.
+// "yuvuvchi" kaliti bo'lsa — backend joriy foydalanuvchini yuvuvchi qiladi.
 export async function update(id, changes) {
-  const dbChanges = appToDb(changes);
-  dbChanges.yangilangan_vaqt = new Date().toISOString();
-
-  if ('yuvuvchi' in changes) {
-    const userId = await getCurrentUserId();
-    dbChanges.yuvuvchi_id = userId;
-  }
-
-  const { error } = await run(
-    supabase.from('buyurtmalar').update(dbChanges).eq('id', id)
-  );
-  if (error) throw error;
+  await api.patch(`/orders/${id}`, changes);
   invalidateCache();
 }
 
 // ── Izoh qo'shish ─────────────────────────────────────
 export async function addIzoh(orderId, matn) {
-  const userId = await getCurrentUserId();
-  const { error } = await run(
-    supabase.from('izohlar').insert({ buyurtma_id: orderId, matn, muallif_id: userId })
-  );
-  if (error) throw error;
+  await api.post(`/orders/${orderId}/izoh`, { matn });
 }
 
 // ── Harakat qo'shish (tarix) ─────────────────────────
 export async function addHarakat(orderId, amal) {
-  const userId = await getCurrentUserId();
-  const { error } = await run(
-    supabase.from('harakatlar').insert({ buyurtma_id: orderId, amal, muallif_id: userId })
-  );
-  if (error) throw error;
+  await api.post(`/orders/${orderId}/harakat`, { amal });
 }
 
 // ── O'chirish ─────────────────────────────────────────
 export async function remove(id) {
-  const { error } = await run(
-    supabase.from('buyurtmalar').delete().eq('id', id)
-  );
-  if (error) throw error;
+  await api.del(`/orders/${id}`);
   invalidateCache();
 }
 
@@ -295,5 +174,5 @@ export function computeStats(orders = [], period = 'kun', specificDate = null) {
 export const getStats = computeStats;
 
 export async function addIzohRasm() {
-  console.warn('addIzohRasm: Storage hali sozlanmagan.');
+  console.warn('addIzohRasm: rasm yuklash hali sozlanmagan.');
 }

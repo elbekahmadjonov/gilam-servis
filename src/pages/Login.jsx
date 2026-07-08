@@ -2,9 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, Key, ChevronDown, ChevronUp } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
-import { supabase } from '../lib/supabaseClient';
-
-const EMAIL_DOMAIN = '@gilamservis.uz';
+import { api } from '../lib/api';
 
 function PasswordInput({ value, onChange, placeholder, show, onToggle, hasError, inputClass }) {
   return (
@@ -87,14 +85,11 @@ export default function Login() {
     setPLoading(true);
     setPXato('');
     try {
-      const email = pLogin.trim() + EMAIL_DOMAIN;
-      const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password: eskiParol });
-      if (signInErr) throw new Error("Eski parol noto'g'ri");
-
-      const { error: updateErr } = await supabase.auth.updateUser({ password: yangiPar });
-      if (updateErr) throw updateErr;
-
-      await supabase.auth.signOut();
+      await api.post('/auth/change-password', {
+        login:      pLogin.trim(),
+        eskiParol,
+        yangiParol: yangiPar,
+      });
 
       setShowParolOyna(false);
       setPLogin(''); setEskiParol(''); setYangiPar(''); setTasdiq('');

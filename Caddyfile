@@ -1,0 +1,26 @@
+# Gilam Servis — Caddy (avtomatik HTTPS / Let's Encrypt)
+# Ikki domen: web client va backend API.
+
+{
+	# Let's Encrypt uchun admin email (ixtiyoriy, {$ACME_EMAIL} orqali)
+	email {$ACME_EMAIL}
+}
+
+# ── Web client (Telegram Mini App shu URL'da ochiladi) ──
+gilam.qariya.uz {
+	encode gzip zstd
+	root * /srv
+	try_files {path} /index.html
+	file_server
+
+	# Hashli assetlar — uzoq kesh
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+}
+
+# ── Backend API + Socket.io ──────────────────────────
+gilamapi.qariya.uz {
+	encode gzip zstd
+	# reverse_proxy WebSocket'ni avtomatik qo'llab-quvvatlaydi
+	reverse_proxy api:3000
+}
