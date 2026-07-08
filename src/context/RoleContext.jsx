@@ -19,6 +19,23 @@ export function RoleProvider({ children }) {
   const [blocked,   setBlocked]   = useState(false); // tenant suspended/muddati tugagan
   const timerRef = useRef(null);
 
+  // Telegram ichida avtomatik kirishga urinadi. Muvaffaqiyatli bo'lsa true.
+  const telegramAutoLogin = useCallback(async () => {
+    if (!isTelegram()) return false;
+    try {
+      const { token, xodim: x } = await api.post('/auth/telegram', {
+        initData: getInitData(),
+      });
+      setToken(token);
+      setXodim({ ...x, rol: capitalizeRole(x.rol) });
+      return true;
+    } catch (err) {
+      if (err.message === 'tenant_suspended') { setBlocked(true); return true; }
+      // 403 not_linked yoki xato — login/parol sahifasiga o'tamiz
+      return false;
+    }
+  }, []);
+
   // ── Sessiyani yuklash (saqlangan token orqali) ───────
   const initSession = useCallback(async () => {
     clearTimeout(timerRef.current);
@@ -34,50 +51,48 @@ export function RoleProvider({ children }) {
       }
     } catch { /* e'tiborsiz */ }
 
-    // Token yo'q — lekin Telegram ichida bo'lsak, avtomatik kirishga urinamiz
-    if (!getToken()) {
-      if (isTelegram()) {
-        try {
-          const { token, xodim: x } = await api.post('/auth/telegram', {
-            initData: getInitData(),
-          });
-          setToken(token);
-          setXodim({ ...x, rol: capitalizeRole(x.rol) });
+    // 1) Saqlangan token bor — sessiyani tekshiramiz (bir marta login qilingach eslab qolish)
+    if (getToken()) {
+      // 15 soniyadan javob kelmasa — xato holati
+      timerRef.current = setTimeout(() => {
+        console.warn('[Auth] ⏱ /me 15s timeout — loading to\'xtatildi');
+        setLoading(false);
+        setAuthError('Server ulanishi vaqt tugadi. Internetni tekshiring.');
+      }, SESSION_TIMEOUT);
+
+      try {
+        const data = await api.get('/auth/me');
+        clearTimeout(timerRef.current);
+        setXodim({ ...data, rol: capitalizeRole(data.rol) });
+        setLoading(false);
+        return; // ✓ eslab qolindi — qaytadan login shart emas
+      } catch (err) {
+        clearTimeout(timerRef.current);
+        if (err.message === 'tenant_suspended') { setBlocked(true); setLoading(false); return; }
+
+        // Sessiya eskirganmi (401 — api.js tokenni tozalagan) yoki xodim topilmadimi?
+        const staleSession = !getToken() || /topilmadi|not.?found|yaroqsiz|invalid/i.test(err.message);
+        if (!staleSession) {
+          // Tarmoq/timeout xatosi — tokenni saqlaymiz, "Qayta urinish" ko'rsatamiz
+          console.warn('[Auth] /me tarmoq xatosi:', err.message);
+          setXodim(null);
+          setAuthError(`Ulanish xatosi: ${err.message}`);
           setLoading(false);
           return;
-        } catch (err) {
-          if (err.message === 'tenant_suspended') { setBlocked(true); setLoading(false); return; }
-          // 403 not_linked yoki xato — login/parol sahifasiga o'tamiz
         }
+        // Eskirgan token — tozalab, pastdagi qaytadan kirish oqimiga tushamiz
+        console.warn('[Auth] /me eskirgan sessiya, token tozalandi:', err.message);
+        setToken(null);
       }
-      setXodim(null);
-      setLoading(false);
-      return;
     }
 
-    // 15 soniyadan javob kelmasa — xato holati
-    timerRef.current = setTimeout(() => {
-      console.warn('[Auth] ⏱ /me 15s timeout — loading to\'xtatildi');
-      setLoading(false);
-      setAuthError('Server ulanishi vaqt tugadi. Internetni tekshiring.');
-    }, SESSION_TIMEOUT);
+    // 2) Token yo'q (yoki eskirdi) — Telegram ichida bo'lsak avtomatik kiramiz
+    if (await telegramAutoLogin()) { setLoading(false); return; }
 
-    try {
-      const data = await api.get('/auth/me');
-      clearTimeout(timerRef.current);
-      setXodim({ ...data, rol: capitalizeRole(data.rol) });
-    } catch (err) {
-      clearTimeout(timerRef.current);
-      if (err.message === 'tenant_suspended') { setBlocked(true); setLoading(false); return; }
-      // Token yaroqsiz bo'lsa api.js uni allaqachon tozalagan
-      console.warn('[Auth] /me xato:', err.message);
-      setXodim(null);
-      // 401 emas, tarmoq xatosi bo'lsa — foydalanuvchiga ko'rsatamiz
-      if (getToken()) setAuthError(`Ulanish xatosi: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    // 3) Aks holda — login/parol sahifasi
+    setXodim(null);
+    setLoading(false);
+  }, [telegramAutoLogin]);
 
   // ── Ilk yuklash ───────────────────────────────────────
   useEffect(() => {

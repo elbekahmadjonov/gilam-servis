@@ -7,6 +7,7 @@ import {
 import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { ToastProvider, useToast } from '../context/ToastContext';
 import { formatSum } from '../utils/formatlash';
+import { ROLLAR } from '../utils/rollar';
 import { superApi, getSuperToken, setSuperToken } from './superApi';
 
 const WEB_BASE = import.meta.env.VITE_WEB_BASE || 'https://gilam.qariya.uz';
@@ -405,6 +406,8 @@ function TenantDetail() {
             <h3 className="font-bold mb-3">Sozlamalar</h3>
             <LimitEditor t={t} onSave={patch} />
           </div>
+
+          <XodimlarManager tenantId={id} onChange={load} />
         </div>
 
         {/* O'ng — amallar */}
@@ -443,6 +446,110 @@ function LimitEditor({ t, onSave }) {
         className="px-5 py-2.5 rounded-xl font-bold bg-gray-900 dark:bg-white text-white dark:text-black">
         Saqlash
       </button>
+    </div>
+  );
+}
+
+// ============================================================
+// Xodimlar boshqaruvi (mijoz detalida)
+// ============================================================
+const ROL_RANG = {
+  Admin:      'text-blue-600 dark:text-blue-400',
+  Dostavchik: 'text-amber-600 dark:text-amber-400',
+  Ishchi:     'text-gray-500 dark:text-gray-400',
+};
+
+function XodimlarManager({ tenantId, onChange }) {
+  const { showToast } = useToast();
+  const [list, setList] = useState(null);
+  const [f, setF]       = useState({ ism: '', login: '', parol: '', rol: 'Ishchi' });
+  const [yuk, setYuk]   = useState(false);
+  const up = (k, v) => setF(p => ({ ...p, [k]: v }));
+
+  const load = useCallback(() => {
+    superApi.get(`/tenants/${tenantId}/xodimlar`).then(setList).catch(() => setList([]));
+  }, [tenantId]);
+  useEffect(() => { load(); }, [load]);
+
+  const add = async () => {
+    if (!f.login.trim() || !f.parol) { showToast('Login va parol kiriting', 'error'); return; }
+    setYuk(true);
+    try {
+      await superApi.post(`/tenants/${tenantId}/xodimlar`, {
+        ism:   f.ism.trim() || f.login.trim(),
+        login: f.login.trim(),
+        parol: f.parol,
+        rol:   f.rol,
+      });
+      showToast('Xodim qo\'shildi', 'success');
+      setF({ ism: '', login: '', parol: '', rol: 'Ishchi' });
+      load();
+      onChange?.();   // tenant kartochkasidagi "Xodimlar" sonini yangilaydi
+    } catch (e) {
+      showToast(e.message?.includes('band') ? 'Bu login band' : 'Xato: ' + e.message, 'error');
+    } finally { setYuk(false); }
+  };
+
+  const del = async (x) => {
+    if (!confirm(`"${x.ism || x.login}" xodimi o'chiriladi. Davom etasizmi?`)) return;
+    try {
+      await superApi.del(`/tenants/${tenantId}/xodimlar/${x.id}`);
+      showToast('O\'chirildi', 'success');
+      load();
+      onChange?.();
+    } catch (e) {
+      showToast('Xato: ' + e.message, 'error');
+    }
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-950 rounded-2xl border border-gray-100 dark:border-gray-800 p-5">
+      <h3 className="font-bold mb-3 flex items-center gap-2"><Users size={16} /> Xodimlar</h3>
+
+      {/* Mavjud xodimlar ro'yxati */}
+      <div className="divide-y divide-gray-50 dark:divide-gray-900 mb-2">
+        {list == null ? (
+          <p className="text-gray-400 text-sm py-2">Yuklanmoqda...</p>
+        ) : list.length === 0 ? (
+          <p className="text-gray-400 text-sm py-2">Hali xodim yo'q.</p>
+        ) : list.map(x => (
+          <div key={x.id} className="flex items-center justify-between py-2.5">
+            <div className="min-w-0">
+              <p className="font-semibold text-sm truncate">
+                {x.ism || x.login}{x.telegram_bogli && <span title="Telegram bog'langan"> 🔗</span>}
+              </p>
+              <p className="text-xs text-gray-400">
+                @{x.login} · <span className={ROL_RANG[x.rol] || ''}>{x.rol}</span>
+              </p>
+            </div>
+            <button onClick={() => del(x)} title="O'chirish"
+              className="text-red-500 hover:bg-red-50 dark:hover:bg-red-950 p-2 rounded-lg shrink-0">
+              <Trash2 size={15} />
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* Yangi xodim qo'shish */}
+      <div className="border-t border-gray-100 dark:border-gray-800 pt-4 space-y-3">
+        <p className="text-sm font-bold text-gray-600 dark:text-gray-400">Yangi xodim qo'shish</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Ism"><input value={f.ism} onChange={e => up('ism', e.target.value)} placeholder="Ism familiya" className={inputCls} /></Field>
+          <Field label="Rol">
+            <select value={f.rol} onChange={e => up('rol', e.target.value)} className={inputCls}>
+              {ROLLAR.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Login"><input value={f.login} onChange={e => up('login', e.target.value)} placeholder="ishchi1" className={inputCls} /></Field>
+          <Field label="Parol"><input value={f.parol} onChange={e => up('parol', e.target.value)} type="text" placeholder="••••" className={inputCls} /></Field>
+        </div>
+        <button onClick={add} disabled={yuk}
+          className="px-5 py-2.5 rounded-xl font-bold bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-60 flex items-center gap-2">
+          <Plus size={16} />{yuk ? 'Qo\'shilmoqda...' : 'Xodim qo\'shish'}
+        </button>
+      </div>
     </div>
   );
 }

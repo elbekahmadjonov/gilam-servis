@@ -2,6 +2,9 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
 import { signToken, signSuperToken, requireAuth, requireSuperAdmin } from '../auth.js';
+import { getTenantById, xodimLimitOshdi } from '../tenant.js';
+
+const ROLLAR = ['Admin', 'Dostavchik', 'Ishchi'];
 
 const router = Router();
 
@@ -170,6 +173,113 @@ router.post('/tenants/:id/impersonate', async (req, res) => {
   } catch (err) {
     console.error('[super/impersonate]', err.message);
     res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
+// ── GET /api/super/tenants/:id/xodimlar ── ro'yxat ────
+router.get('/tenants/:id/xodimlar', async (req, res) => {
+  try {
+    const { rows } = await query(
+      `SELECT id, ism, login, rol, telefon,
+              (telegram_id IS NOT NULL) AS telegram_bogli
+       FROM xodimlar WHERE tenant_id = $1 ORDER BY created_at ASC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[super/xodimlar/list]', err.message);
+    res.status(500).json({ error: 'Xodimlarni yuklab bo\'lmadi' });
+  }
+});
+
+// ── POST /api/super/tenants/:id/xodimlar ── qo'shish ──
+// Kirish: { ism, login, parol, rol, telefon? }
+router.post('/tenants/:id/xodimlar', async (req, res) => {
+  try {
+    const { ism = '', login, parol, rol = 'Ishchi', telefon = '' } = req.body || {};
+    if (!login || !parol) return res.status(400).json({ error: 'Login va parol talab qilinadi' });
+    if (String(parol).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgi bo\'lishi kerak' });
+    if (!ROLLAR.includes(rol)) return res.status(400).json({ error: 'Rol noto\'g\'ri' });
+
+    const tenant = await getTenantById(req.params.id);
+    if (!tenant) return res.status(404).json({ error: 'Mijoz topilmadi' });
+    if (await xodimLimitOshdi(tenant)) {
+      return res.status(403).json({ error: 'Xodim limiti to\'lgan' });
+    }
+
+    const hash = await bcrypt.hash(parol, 10);
+    const { rows } = await query(
+      `INSERT INTO xodimlar (tenant_id, ism, login, parol_hash, rol, telefon)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id, ism, login, rol, telefon`,
+      [tenant.id, ism || login, String(login).trim(), hash, rol, telefon]
+    );
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'Bu login shu mijozda band' });
+    console.error('[super/xodimlar/create]', err.message);
+    res.status(500).json({ error: 'Xodim qo\'shib bo\'lmadi' });
+  }
+});
+
+// ── PATCH /api/super/tenants/:id/xodimlar/:xid ── (ism/rol/telefon/parol) ──
+router.patch('/tenants/:id/xodimlar/:xid', async (req, res) => {
+  try {
+    const { ism, rol, telefon, parol } = req.body || {};
+    const sets = []; const params = []; let i = 1;
+    if (ism != null)     { sets.push(`ism = $${i++}`);     params.push(ism); }
+    if (telefon != null) { sets.push(`telefon = $${i++}`); params.push(telefon); }
+    if (rol != null) {
+      if (!ROLLAR.includes(rol)) return res.status(400).json({ error: 'Rol noto\'g\'ri' });
+      sets.push(`rol = $${i++}`); params.push(rol);
+    }
+    if (parol) {
+      if (String(parol).length < 4) return res.status(400).json({ error: 'Parol kamida 4 belgi bo\'lishi kerak' });
+      sets.push(`parol_hash = $${i++}`); params.push(await bcrypt.hash(parol, 10));
+    }
+    if (!sets.length) return res.status(400).json({ error: 'O\'zgartirish yo\'q' });
+
+    params.push(req.params.xid, req.params.id);
+    const { rows } = await query(
+      `UPDATE xodimlar SET ${sets.join(', ')}
+       WHERE id = $${i++} AND tenant_id = $${i}
+       RETURNING id, ism, login, rol, telefon`,
+      params
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Xodim topilmadi' });
+    res.json(rows[0]);
+  } catch (err) {
+    console.error('[super/xodimlar/update]', err.message);
+    res.status(500).json({ error: 'Yangilab bo\'lmadi' });
+  }
+});
+
+// ── DELETE /api/super/tenants/:id/xodimlar/:xid ───────
+router.delete('/tenants/:id/xodimlar/:xid', async (req, res) => {
+  try {
+    const target = await query(
+      'SELECT rol FROM xodimlar WHERE id = $1 AND tenant_id = $2',
+      [req.params.xid, req.params.id]
+    );
+    if (!target.rows[0]) return res.status(404).json({ error: 'Xodim topilmadi' });
+
+    // Oxirgi adminni o'chirishga yo'l qo'ymaymiz (mijoz boshqaruvsiz qolmasin)
+    if (target.rows[0].rol === 'Admin') {
+      const adm = await query(
+        `SELECT count(*)::int AS n FROM xodimlar WHERE tenant_id = $1 AND rol = 'Admin'`,
+        [req.params.id]
+      );
+      if (adm.rows[0].n <= 1) {
+        return res.status(400).json({ error: 'Yagona adminni o\'chirib bo\'lmaydi' });
+      }
+    }
+
+    await query('DELETE FROM xodimlar WHERE id = $1 AND tenant_id = $2',
+      [req.params.xid, req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[super/xodimlar/delete]', err.message);
+    res.status(500).json({ error: 'O\'chirib bo\'lmadi' });
   }
 });
 
