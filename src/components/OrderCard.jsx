@@ -1,19 +1,12 @@
-import { useRef } from 'react';
-import { Phone, MapPin, User, Copy, Camera, Image, PhoneCall } from 'lucide-react';
+import { Phone, MapPin, User, Copy, PhoneCall } from 'lucide-react';
 import StatusBadge from './StatusBadge';
 import { formatVaqt } from '../utils/formatlash';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
-import { useRole } from '../context/RoleContext';
-import { compressImage } from '../utils/imageUtils';
-import * as orderService from '../services/orders';
 
-export default function OrderCard({ order, onDetail, onRefresh }) {
+export default function OrderCard({ order, onDetail }) {
   const { dark } = useTheme();
   const { showToast } = useToast();
-  const { role } = useRole();
-  const cameraRef = useRef(null);
-  const galleryRef = useRef(null);
 
   const handleCall = (e) => {
     e.stopPropagation();
@@ -31,24 +24,6 @@ export default function OrderCard({ order, onDetail, onRefresh }) {
     }
   };
 
-  const handleImageFile = async (e, source) => {
-    e.stopPropagation();
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      showToast('Rasm saqlanmoqda...', 'info', 1500);
-      const base64 = await compressImage(file, 1200, 0.7);
-      await orderService.addIzohRasm(order.id, base64, role, source);
-      if (onRefresh) onRefresh();
-      showToast('Rasm izoh sifatida saqlandi!', 'success');
-    } catch (err) {
-      console.error('Rasm saqlash xatosi:', err);
-      showToast('Rasmni saqlashda xato: ' + (err?.message || ''), 'error');
-    }
-    // Reset input to allow same file re-selection
-    e.target.value = '';
-  };
-
   return (
     <div
       className={`rounded-2xl p-4 mb-3 shadow-sm border transition-all active:scale-[0.99] cursor-pointer ${
@@ -56,23 +31,6 @@ export default function OrderCard({ order, onDetail, onRefresh }) {
       }`}
       onClick={() => onDetail(order)}
     >
-      {/* Hidden file inputs */}
-      <input
-        ref={cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => handleImageFile(e, 'kamera')}
-      />
-      <input
-        ref={galleryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => handleImageFile(e, 'galereya')}
-      />
-
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -122,20 +80,6 @@ export default function OrderCard({ order, onDetail, onRefresh }) {
             title="Manzilni nusxalash"
           >
             <Copy size={15} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); cameraRef.current?.click(); }}
-            className="w-9 h-9 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center hover:bg-purple-200 transition-all active:scale-90"
-            title="Kamera"
-          >
-            <Camera size={15} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); galleryRef.current?.click(); }}
-            className="w-9 h-9 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center hover:bg-amber-200 transition-all active:scale-90"
-            title="Galereya"
-          >
-            <Image size={15} />
           </button>
         </div>
         <button
