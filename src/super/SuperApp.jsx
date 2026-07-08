@@ -8,6 +8,7 @@ import { ThemeProvider, useTheme } from '../context/ThemeContext';
 import { ToastProvider, useToast } from '../context/ToastContext';
 import { formatSum } from '../utils/formatlash';
 import { ROLLAR } from '../utils/rollar';
+import LangToggle from '../components/LangToggle';
 import { superApi, getSuperToken, setSuperToken } from './superApi';
 
 const WEB_BASE = import.meta.env.VITE_WEB_BASE || 'https://gilam.qariya.uz';
@@ -114,10 +115,13 @@ function Shell({ admin, onLogout, children }) {
           <NavItem to="/tenants" icon={Building2} label="Mijozlar" />
         </nav>
         <div className="mt-auto">
-          <button onClick={toggleDark}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-            {dark ? <Sun size={18}/> : <Moon size={18}/>} {dark ? 'Yorug\'' : 'Qorong\'i'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button onClick={toggleDark}
+              className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+              {dark ? <Sun size={18}/> : <Moon size={18}/>} {dark ? 'Yorug\'' : 'Qorong\'i'}
+            </button>
+            <LangToggle dark={dark} />
+          </div>
           <div className="mt-2 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
             <div className="min-w-0">
               <p className="text-sm font-bold truncate">{admin?.ism || 'Super Admin'}</p>

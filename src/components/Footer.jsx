@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tablet, HandCoins, Clock, XCircle, Users, BarChart3 } from 'lucide-react';
+import { Tablet, HandCoins, Clock, Wallet, Users, BarChart3 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import { allowedTabs } from '../utils/rollar';
@@ -8,9 +8,9 @@ const ALL_TABS = [
   { path: '/',           label: 'Buyurtmalar', icon: Tablet    },
   { path: '/qarz',       label: 'Qarz',        icon: HandCoins },
   { path: '/tarix',      label: 'Tarix',        icon: Clock     },
-  { path: '/otkaz',      label: 'Otkaz',        icon: XCircle   },
   { path: '/mijozlar',   label: 'Mijozlar',     icon: Users     },
   { path: '/statistika', label: 'Statistika',   icon: BarChart3 },
+  { path: '/hisob',      label: 'Hisob',        icon: Wallet    },
 ];
 
 export default function Footer({ orders = [] }) {
@@ -19,14 +19,10 @@ export default function Footer({ orders = [] }) {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const otkazSoni = orders.filter(o => o.status === 'otkaz').length;
   const visiblePaths = allowedTabs(role);
   const tabs = ALL_TABS
     .filter(t => visiblePaths.includes(t.path))
-    .map(t => ({
-      ...t,
-      badge: t.path === '/otkaz' ? otkazSoni : 0,
-    }));
+    .map(t => ({ ...t, badge: 0 }));
 
   return (
     <div

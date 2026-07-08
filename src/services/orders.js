@@ -130,45 +130,104 @@ export function search(query, orders = []) {
   );
 }
 
+// Buyurtma davrga (period) tegishlimi — yangilangan vaqti bo'yicha
+function davrgaKiradi(o, period, now, specificDate) {
+  const d = new Date(o.yangilanganVaqt);
+  if (period === 'kun') {
+    return d.toDateString() === now.toDateString();
+  } else if (period === 'hafta') {
+    return d >= new Date(now - 7 * 86400000);
+  } else if (period === 'oy') {
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  } else if (period === 'sana' && specificDate) {
+    const t = new Date(specificDate);
+    return d.getFullYear() === t.getFullYear() &&
+           d.getMonth()    === t.getMonth()    &&
+           d.getDate()     === t.getDate();
+  }
+  return true;
+}
+
+// Bir buyurtmadagi mahsulot hajmlari (m², metr, dona, kg)
+function orderHajmi(o) {
+  const n = o.narxlar  || {};
+  const t = o.tovarlar || {};
+  const gilamM2 = (n.gilamlar || []).reduce((s, g) => s + (Number(g.yuza) || 0), 0);
+  const korpachaMetr = (n.korpachalar || []).reduce((s, k) => s + (Number(k.metr) || 0), 0)
+    || (Number(n.korpacha?.metr) || 0);
+  const pardaKg = (n.pardalar || []).reduce((s, p) => s + (Number(p.kg) || 0), 0)
+    || (Number(n.parda?.kg) || 0);
+  return {
+    gilamM2,
+    korpachaMetr,
+    pardaKg,
+    gilamSoni:  Number(t.gilamSoni)  || (n.gilamlar?.length || 0),
+    odealSoni:  Number(t.odealSoni)  || 0,
+    korpaSoni:  Number(t.korpaSoni)  || 0,
+  };
+}
+
 // ── Statistika (sinxron) ─────────────────────────────
 export function computeStats(orders = [], period = 'kun', specificDate = null) {
-  const now    = new Date();
-  const tugadi = orders.filter(o => o.status === 'tugadi');
+  const now = new Date();
 
-  let filtered = tugadi;
-  if (period === 'kun') {
-    filtered = tugadi.filter(o =>
-      new Date(o.yangilanganVaqt).toDateString() === now.toDateString()
-    );
-  } else if (period === 'hafta') {
-    const weekAgo = new Date(now - 7 * 86400000);
-    filtered = tugadi.filter(o => new Date(o.yangilanganVaqt) >= weekAgo);
-  } else if (period === 'oy') {
-    filtered = tugadi.filter(o => {
-      const d = new Date(o.yangilanganVaqt);
-      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-    });
-  } else if (period === 'sana' && specificDate) {
-    const target = new Date(specificDate);
-    filtered = tugadi.filter(o => {
-      const d = new Date(o.yangilanganVaqt);
-      return d.getFullYear() === target.getFullYear() &&
-             d.getMonth()    === target.getMonth()    &&
-             d.getDate()     === target.getDate();
-    });
-  }
+  // Davrga tegishli buyurtmalar (barcha statuslar) — hajm uchun
+  const davrOrders = orders.filter(o => davrgaKiradi(o, period, now, specificDate));
+  // Shu davrda tugagan buyurtmalar — daromad uchun
+  const tugadiDavr = davrOrders.filter(o => o.status === 'tugadi');
 
   const statusCounts = {};
   ['yangi', 'jarayonda', 'qadoqlash', 'dostavka', 'tugadi', 'otkaz'].forEach(s => {
     statusCounts[s] = orders.filter(o => o.status === s).length;
   });
 
+  // Mahsulot hajmlari (davr bo'yicha)
+  const hajm = { gilamM2: 0, korpachaMetr: 0, pardaKg: 0, gilamSoni: 0, odealSoni: 0, korpaSoni: 0 };
+  davrOrders.forEach(o => {
+    const h = orderHajmi(o);
+    hajm.gilamM2      += h.gilamM2;
+    hajm.korpachaMetr += h.korpachaMetr;
+    hajm.pardaKg      += h.pardaKg;
+    hajm.gilamSoni    += h.gilamSoni;
+    hajm.odealSoni    += h.odealSoni;
+    hajm.korpaSoni    += h.korpaSoni;
+  });
+  hajm.gilamM2      = Math.round(hajm.gilamM2 * 100) / 100;
+  hajm.korpachaMetr = Math.round(hajm.korpachaMetr * 100) / 100;
+  hajm.pardaKg      = Math.round(hajm.pardaKg * 100) / 100;
+
   return {
     statusCounts,
-    daromad:      filtered.reduce((s, o) => s + (o.yakuniySumma || 0), 0),
+    daromad:      tugadiDavr.reduce((s, o) => s + (o.yakuniySumma || 0), 0),
     jamilarQarz:  orders.reduce((s, o) => s + (o.qarz || 0), 0),
-    periodTushum: filtered.length,
+    periodTushum: tugadiDavr.length,
+    hajm,
   };
+}
+
+// Xarajatlarni davr bo'yicha yig'ish (Statistika/Hisob uchun)
+export function sumXarajatlar(xarajatlar = [], period = 'kun', specificDate = null) {
+  const now = new Date();
+  const inDavr = (sana) => {
+    const d = new Date(sana + 'T00:00:00');
+    if (period === 'kun')   return d.toDateString() === now.toDateString();
+    if (period === 'hafta') return d >= new Date(now - 7 * 86400000);
+    if (period === 'oy')    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    if (period === 'sana' && specificDate) {
+      const t = new Date(specificDate);
+      return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
+    }
+    return true;
+  };
+  const acc = { gaz: 0, obed: 0, ishchi: 0, boshqa: 0 };
+  xarajatlar.filter(x => inDavr(x.sana)).forEach(x => {
+    acc.gaz    += Number(x.gaz)    || 0;
+    acc.obed   += Number(x.obed)   || 0;
+    acc.ishchi += Number(x.ishchi) || 0;
+    acc.boshqa += Number(x.boshqa) || 0;
+  });
+  acc.jami = acc.gaz + acc.obed + acc.ishchi + acc.boshqa;
+  return acc;
 }
 
 export const getStats = computeStats;

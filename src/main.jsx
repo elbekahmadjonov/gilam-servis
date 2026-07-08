@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import SuperApp from './super/SuperApp.jsx'
+import { startTranslit, isKiril } from './utils/translit'
 
 // gilamadmin.qariya.uz → Super Admin panel; boshqa domenlar → mijoz ilovasi
 const isSuper = typeof window !== 'undefined'
@@ -16,3 +17,6 @@ createRoot(document.getElementById('root')).render(
     {isSuper ? <SuperApp /> : <App />}
   </StrictMode>,
 )
+
+// Kiril rejim yoqilgan bo'lsa — DOM ustida jonli transliteratsiya
+if (isKiril()) startTranslit()

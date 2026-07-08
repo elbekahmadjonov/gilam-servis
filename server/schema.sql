@@ -225,6 +225,28 @@ CREATE TRIGGER trg_buyurtmalar_yangilangan
   BEFORE UPDATE ON buyurtmalar
   FOR EACH ROW EXECUTE FUNCTION set_yangilangan_vaqt();
 
+
+-- ── 13. XARAJATLAR (kunlik sarf-harajatlar — Owner uchun) ─────
+-- Har tenant + sana uchun bitta satr (upsert).
+
+CREATE TABLE IF NOT EXISTS xarajatlar (
+  id          bigserial     PRIMARY KEY,
+  tenant_id   uuid          NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  sana        date          NOT NULL,
+  gaz         numeric(14,0) NOT NULL DEFAULT 0,
+  obed        numeric(14,0) NOT NULL DEFAULT 0,
+  ishchi      numeric(14,0) NOT NULL DEFAULT 0,
+  boshqa      numeric(14,0) NOT NULL DEFAULT 0,
+  izoh        text                    DEFAULT '',
+  created_at  timestamptz   NOT NULL DEFAULT now()
+);
+
+ALTER TABLE xarajatlar DROP CONSTRAINT IF EXISTS xarajatlar_tenant_sana_key;
+ALTER TABLE xarajatlar ADD  CONSTRAINT xarajatlar_tenant_sana_key UNIQUE (tenant_id, sana);
+
+CREATE INDEX IF NOT EXISTS idx_xarajatlar_tenant_sana ON xarajatlar(tenant_id, sana);
+
+
 -- ================================================================
 -- TAYYOR. SuperAdmin va default admin yaratish:  npm run seed
 -- ================================================================

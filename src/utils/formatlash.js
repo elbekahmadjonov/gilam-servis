@@ -27,9 +27,23 @@ export function formatSana(isoStr) {
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
+// Pul summasini vergul bilan ajratadi: 1000000 → "1,000,000"
 export function formatSum(num) {
   if (!num && num !== 0) return '0';
   return Number(num)
     .toFixed(0)
-    .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    .replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Input uchun: xom qatordan raqamlarni ajratib, vergul bilan formatlaydi.
+// "1000000" yoki "1,000,000" → "1,000,000"
+export function formatMoneyInput(str) {
+  const digits = String(str ?? '').replace(/[^\d]/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// Vergulli qatordan toza raqam qatorini qaytaradi: "1,000,000" → "1000000"
+export function parseSum(str) {
+  return String(str ?? '').replace(/[^\d]/g, '');
 }

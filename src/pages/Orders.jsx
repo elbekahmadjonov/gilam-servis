@@ -17,8 +17,8 @@ export default function Orders({ orders, onDetail, onRefresh, loading = false })
   const { role } = useRole();
 
   const roleStatuses = allowedStatuses(role);
-  // Admin va boshqa rol uchun ko'rinadigan status kartochkalar
-  const visibleCards = role === 'Admin'
+  // Admin/Owner barcha status kartochkalarni ko'radi, boshqalar faqat o'ziniki
+  const visibleCards = (role === 'Admin' || role === 'Owner')
     ? ALL_STATUS_CARDS
     : ALL_STATUS_CARDS.filter(s => roleStatuses.includes(s.key));
 

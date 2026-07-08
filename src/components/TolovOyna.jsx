@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { formatSum } from '../utils/formatlash';
+import MoneyInput from './MoneyInput';
 
 export default function TolovOyna({ order, dark, onClose, onSave }) {
   const [chegirma, setChegirma] = useState(order.chegirma || 0);
@@ -63,9 +64,7 @@ export default function TolovOyna({ order, dark, onClose, onSave }) {
           {/* Chegirma */}
           <div>
             <label className={`text-sm font-semibold mb-1.5 block ${dark ? 'text-gray-300' : 'text-gray-700'}`}>Chegirma (so'm)</label>
-            <input type="number" placeholder="0" value={chegirma}
-              onChange={e => setChegirma(e.target.value)}
-              className={inputCls} />
+            <MoneyInput value={chegirma} onChange={setChegirma} className={inputCls} />
           </div>
 
           {/* Yakuniy summa */}
@@ -101,15 +100,11 @@ export default function TolovOyna({ order, dark, onClose, onSave }) {
             <div className="space-y-3">
               <div>
                 <label className={`text-xs mb-1 block ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Naqd (so'm)</label>
-                <input type="number" placeholder="0" value={naqdSum}
-                  onChange={e => setNaqdSum(e.target.value)}
-                  className={inputCls} />
+                <MoneyInput value={naqdSum} onChange={setNaqdSum} className={inputCls} />
               </div>
               <div>
                 <label className={`text-xs mb-1 block ${dark ? 'text-gray-500' : 'text-gray-400'}`}>Karta (so'm)</label>
-                <input type="number" placeholder="0" value={kartaSum}
-                  onChange={e => setKartaSum(e.target.value)}
-                  className={inputCls} />
+                <MoneyInput value={kartaSum} onChange={setKartaSum} className={inputCls} />
               </div>
               {aralashXato() && (
                 <div className="text-xs text-red-500 font-medium p-2 bg-red-50 rounded-xl">
@@ -135,9 +130,7 @@ export default function TolovOyna({ order, dark, onClose, onSave }) {
             </label>
             {qarzBormi && (
               <div className="mt-2">
-                <input type="number" placeholder="Qancha qarz? (so'm)" value={qarzMiqdor}
-                  onChange={e => setQarzMiqdor(e.target.value)}
-                  className={inputCls} />
+                <MoneyInput value={qarzMiqdor} onChange={setQarzMiqdor} placeholder="Qancha qarz? (so'm)" className={inputCls} />
               </div>
             )}
           </div>

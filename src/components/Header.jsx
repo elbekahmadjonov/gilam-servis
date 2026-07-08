@@ -3,6 +3,7 @@ import { Moon, Sun, LogOut, Search, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import StatusBadge from './StatusBadge';
+import LangToggle from './LangToggle';
 
 // searchResults — App.jsx dan filtrlangan orders massivi
 export default function Header({ searchQuery, onSearchChange, onNewOrder, onSelectOrder, searchResults = [] }) {
@@ -37,6 +38,7 @@ export default function Header({ searchQuery, onSearchChange, onNewOrder, onSele
           <span className={dark ? 'text-white' : 'text-gray-900'}>Servis</span>
         </span>
         <div className="flex items-center gap-2">
+          <LangToggle dark={dark} />
           <button
             onClick={toggleDark}
             className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${

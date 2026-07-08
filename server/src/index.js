@@ -10,6 +10,7 @@ import { verifyToken } from './auth.js';
 import authRoutes from './routes/auth.js';
 import orderRoutes from './routes/orders.js';
 import templateRoutes from './routes/templates.js';
+import xarajatRoutes from './routes/xarajatlar.js';
 import superRoutes from './routes/super.js';
 
 const app = express();
@@ -34,6 +35,7 @@ app.get('/api/health', async (_req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/xarajatlar', xarajatRoutes);
 app.use('/api/super', superRoutes);
 
 // 404

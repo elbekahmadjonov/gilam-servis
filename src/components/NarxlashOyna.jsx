@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Plus, Trash2 } from 'lucide-react';
 import { formatSum } from '../utils/formatlash';
+import MoneyInput from './MoneyInput';
 import { getTemplates, addTemplate, removeTemplate, loadTemplates } from '../services/templates';
 
 // ============================================================
@@ -332,8 +333,8 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
                   </div>
                   <div>
                     <FieldLabel dark={dark} required>Narxi (so'm/m²)</FieldLabel>
-                    <input type="number" inputMode="numeric" placeholder="0" value={g.narxM2}
-                      onChange={e => upGilam(i, 'narxM2', e.target.value)}
+                    <MoneyInput value={g.narxM2}
+                      onChange={val => upGilam(i, 'narxM2', val)}
                       className={isErr(`Gilam ${i+1}: narx`) ? inputErrCls : inputCls}
                     />
                     {/* Chip row — faqat gilam turi uchun */}
@@ -371,8 +372,8 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
                     onRemove={() => setOdeallar(arr => arr.filter((_, j) => j !== i))}
                   />
                   <FieldLabel dark={dark} required>Narxi (so'm)</FieldLabel>
-                  <input type="number" inputMode="numeric" placeholder="0" value={o.narx}
-                    onChange={e => upArr(setOdeallar, i, 'narx', e.target.value, u => fmt(u.narx))}
+                  <MoneyInput value={o.narx}
+                    onChange={val => upArr(setOdeallar, i, 'narx', val, u => fmt(u.narx))}
                     className={isErr(`Odeal ${i+1}`) ? inputErrCls : inputCls}
                   />
                   <PriceChips
@@ -408,8 +409,8 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
                     onRemove={() => setKorpalar(arr => arr.filter((_, j) => j !== i))}
                   />
                   <FieldLabel dark={dark} required>Narxi (so'm)</FieldLabel>
-                  <input type="number" inputMode="numeric" placeholder="0" value={k.narx}
-                    onChange={e => upArr(setKorpalar, i, 'narx', e.target.value, u => fmt(u.narx))}
+                  <MoneyInput value={k.narx}
+                    onChange={val => upArr(setKorpalar, i, 'narx', val, u => fmt(u.narx))}
                     className={isErr(`Ko'rpa ${i+1}`) ? inputErrCls : inputCls}
                   />
                   <PriceChips
@@ -455,8 +456,8 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
                     </div>
                     <div>
                       <FieldLabel dark={dark} required>Narx (so'm/kg)</FieldLabel>
-                      <input type="number" inputMode="numeric" placeholder="0" value={p.narxKg}
-                        onChange={e => upArr(setPardalar, i, 'narxKg', e.target.value,
+                      <MoneyInput value={p.narxKg}
+                        onChange={val => upArr(setPardalar, i, 'narxKg', val,
                           u => fmt(u.kg) * fmt(u.narxKg))}
                         className={isErr(`Parda ${i+1}: narx`) ? inputErrCls : inputCls}
                       />
@@ -504,8 +505,8 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
                     </div>
                     <div>
                       <FieldLabel dark={dark} required>Narx (so'm/m)</FieldLabel>
-                      <input type="number" inputMode="numeric" placeholder="0" value={k.narxMetr}
-                        onChange={e => upArr(setKorpachalar, i, 'narxMetr', e.target.value,
+                      <MoneyInput value={k.narxMetr}
+                        onChange={val => upArr(setKorpachalar, i, 'narxMetr', val,
                           u => fmt(u.metr) * fmt(u.narxMetr))}
                         className={isErr(`Ko'rpacha ${i+1}: narx`) ? inputErrCls : inputCls}
                       />

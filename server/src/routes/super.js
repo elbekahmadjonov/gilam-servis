@@ -4,7 +4,7 @@ import { query } from '../db.js';
 import { signToken, signSuperToken, requireAuth, requireSuperAdmin } from '../auth.js';
 import { getTenantById, xodimLimitOshdi } from '../tenant.js';
 
-const ROLLAR = ['Admin', 'Dostavchik', 'Ishchi'];
+const ROLLAR = ['Owner', 'Admin', 'Dostavchik', 'Ishchi'];
 
 const router = Router();
 

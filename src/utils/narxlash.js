@@ -35,5 +35,5 @@ export function hisoblaNarx(narxlar, tovarlar) {
 
 export function formatSum(sum) {
   if (!sum && sum !== 0) return '0';
-  return Number(sum).toLocaleString('uz-UZ').replace(/,/g, ' ');
+  return Number(sum).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }

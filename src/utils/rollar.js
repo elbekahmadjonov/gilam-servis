@@ -1,22 +1,26 @@
 // rollar.js — Rol-asosli ruxsatlar
 
-export const ROLLAR = ['Admin', 'Dostavchik', 'Ishchi'];
+export const ROLLAR = ['Owner', 'Admin', 'Dostavchik', 'Ishchi'];
 
-// Har rol uchun ko'rinadigan tab yo'llari
+// Har rol uchun ko'rinadigan tab yo'llari.
+// Owner = Admin bilan bir xil, ustiga faqat unda ko'rinadigan "/hisob".
 export const ALLOWED_TABS = {
-  Admin:      ['/', '/qarz', '/tarix', '/otkaz', '/mijozlar', '/statistika'],
-  Dostavchik: ['/', '/qarz', '/tarix', '/otkaz'],
-  Ishchi:     ['/', '/tarix', '/otkaz'],
+  Owner:      ['/', '/qarz', '/tarix', '/mijozlar', '/statistika', '/hisob'],
+  Admin:      ['/', '/qarz', '/tarix', '/mijozlar', '/statistika'],
+  Dostavchik: ['/', '/qarz', '/tarix'],
+  Ishchi:     ['/', '/tarix'],
 };
 
 // Har rol uchun faol bo'lgan statuslar (tugmalar ishlaydi)
 export const ALLOWED_STATUSES = {
+  Owner:      ['yangi', 'jarayonda', 'qadoqlash', 'dostavka'],
   Admin:      ['yangi', 'jarayonda', 'qadoqlash', 'dostavka'],
   Dostavchik: ['yangi', 'dostavka'],
   Ishchi:     ['jarayonda', 'qadoqlash'],
 };
 
 const RUXSATLAR = {
+  Owner:      ['create', 'edit', 'delete', 'cancel', 'assign', 'price', 'payment', 'deliver', 'view_all', 'accept', 'wash', 'pack', 'hisob'],
   Admin:      ['create', 'edit', 'delete', 'cancel', 'assign', 'price', 'payment', 'deliver', 'view_all', 'accept', 'wash', 'pack'],
   Dostavchik: ['deliver', 'add_comment', 'accept'],
   Ishchi:     ['wash', 'pack', 'add_comment', 'price'],
