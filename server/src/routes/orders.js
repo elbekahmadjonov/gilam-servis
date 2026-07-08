@@ -27,8 +27,9 @@ const COL_MAP = {
   lat:          'lat',
   lng:          'lng',
   yuvuvchiId:   'yuvuvchi_id',
+  ijrochilar:   'ijrochilar',
 };
-const JSONB_COLS = new Set(['bosqich', 'tovarlar', 'narxlar', 'tolov']);
+const JSONB_COLS = new Set(['bosqich', 'tovarlar', 'narxlar', 'tolov', 'ijrochilar']);
 
 // jsonb ustunlar uchun obyektni string qilamiz (node-pg talabi)
 function encode(col, val) {

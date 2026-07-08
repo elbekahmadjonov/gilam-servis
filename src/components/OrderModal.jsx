@@ -17,6 +17,9 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   const { role, xodim } = useRole();
   const { showToast } = useToast();
 
+  // Joriy xodim nomi — status bosqichini kim bajarganini yozish uchun
+  const ijrochiNomi = xodim?.ism || xodim?.login || role || 'Noma\'lum';
+
   const [order,         setOrder]         = useState(initialOrder);
   const [izohMatn,      setIzohMatn]      = useState('');
   const [showTovarOyna, setShowTovarOyna] = useState(false);
@@ -370,7 +373,10 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
           order={order} dark={dark} role={role}
           onClose={() => setShowTovarOyna(false)}
           onSave={async (tovarlar, lat, lng) => {
-            const changes = { tovarlar, status: 'jarayonda', yuvuvchi: role };
+            const changes = {
+              tovarlar, status: 'jarayonda', yuvuvchi: role,
+              ijrochilar: { ...order.ijrochilar, zayavka: ijrochiNomi },
+            };
             if (lat != null && lng != null) {
               changes.lat = lat;
               changes.lng = lng;
@@ -393,6 +399,7 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
               yakuniySumma: umumiyHisob,
               status: 'qadoqlash',
               bosqich: { ...order.bosqich, yakunladi: true },
+              ijrochilar: { ...order.ijrochilar, yuvilmoqda: ijrochiNomi },
             }, 'Yuvish yakunlandi → Qadoqlash');
             setShowNarxOyna(false);
           }}
@@ -410,6 +417,7 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
               ...tolovMa,
               status: 'tugadi',
               bosqich: { ...order.bosqich, yetkazildi: true },
+              ijrochilar: { ...order.ijrochilar, dastavka: ijrochiNomi },
             }, 'Yetkazildi → Tugadi');
           }}
         />
@@ -607,6 +615,7 @@ function TarixModal({ order, dark, onClose }) {
 
 function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich, onBekorBosqich, onStatusChange, onOpenTovar, onOpenNarx, onOpenTolov, showToast }) {
   const noAccess = () => showToast('Bu amal sizning rolingizda mavjud emas', 'error');
+  const ijrochiNomi = xodim?.ism || xodim?.login || role || 'Noma\'lum';
 
   const BannerTasdiq = ({ label, onBekor }) => (
     <div className="flex items-center justify-between p-3 bg-green-100 rounded-xl mb-2">
@@ -720,7 +729,10 @@ function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich,
           <ActionBtn
             onClick={async () => {
               await onBosqich('qadoqlandi', 'Qadoqlandi');
-              await onStatusChange({ status: 'dostavka' }, 'Qadoqlandi → Dostavka');
+              await onStatusChange({
+                status: 'dostavka',
+                ijrochilar: { ...order.ijrochilar, pardozda: ijrochiNomi },
+              }, 'Qadoqlandi → Dostavka');
             }}
             className="bg-purple-600 text-white"
           >

@@ -4,24 +4,41 @@ import { useTheme } from '../context/ThemeContext';
 import StatusBadge from '../components/StatusBadge';
 import { formatVaqt, formatSum, formatSana } from '../utils/formatlash';
 
+const IJRO_LABELS = [
+  { key: 'zayavka',    label: 'Zayavka' },
+  { key: 'yuvilmoqda', label: 'Yuvilmoqda' },
+  { key: 'pardozda',   label: 'Pardozda' },
+  { key: 'dastavka',   label: 'Dastavka' },
+];
+
+// Buyurtmada ishtirok etgan barcha xodim nomlari (ijrochilar qiymatlari)
+function ishtirokchilar(order) {
+  return Object.values(order.ijrochilar || {}).filter(Boolean);
+}
+
 export default function History({ orders }) {
   const { dark } = useTheme();
   const [filterDate, setFilterDate] = useState('');
+  const [filterPerson, setFilterPerson] = useState('');
   const [selected, setSelected] = useState(null);
 
   const allFinished = orders
     .filter(o => o.status === 'tugadi')
     .sort((a, b) => new Date(b.yangilanganVaqt) - new Date(a.yangilanganVaqt));
 
-  const finished = filterDate
-    ? allFinished.filter(o => {
-        const d = new Date(o.yangilanganVaqt);
-        const t = new Date(filterDate);
-        return d.getFullYear() === t.getFullYear() &&
-               d.getMonth()    === t.getMonth()    &&
-               d.getDate()     === t.getDate();
-      })
-    : allFinished;
+  // Barcha ijrochilar (login/ism) ro'yxati — sort uchun
+  const allPersons = [...new Set(allFinished.flatMap(ishtirokchilar))].sort();
+
+  const finished = allFinished
+    .filter(o => {
+      if (!filterDate) return true;
+      const d = new Date(o.yangilanganVaqt);
+      const t = new Date(filterDate);
+      return d.getFullYear() === t.getFullYear() &&
+             d.getMonth()    === t.getMonth()    &&
+             d.getDate()     === t.getDate();
+    })
+    .filter(o => !filterPerson || ishtirokchilar(o).includes(filterPerson));
 
   const textPrimary = dark ? 'text-white' : 'text-gray-900';
   const textSec = dark ? 'text-gray-400' : 'text-gray-500';
@@ -52,6 +69,33 @@ export default function History({ orders }) {
           </button>
         )}
       </div>
+
+      {/* Xodim (login) bo'yicha sort — kim qaysi buyurtmada ishtirok etgan */}
+      {allPersons.length > 0 && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className={`text-xs font-semibold flex-shrink-0 ${textSec}`}>👤 Xodim:</span>
+          <select
+            value={filterPerson}
+            onChange={e => setFilterPerson(e.target.value)}
+            className={`text-sm rounded-xl px-3 py-1.5 outline-none border-2 flex-1 transition-all ${
+              filterPerson
+                ? 'border-blue-500 ' + (dark ? 'bg-gray-800 text-white' : 'bg-blue-50 text-gray-800')
+                : dark ? 'bg-gray-800 border-gray-700 text-gray-300' : 'bg-white border-gray-200 text-gray-700'
+            }`}
+          >
+            <option value="">Barchasi</option>
+            {allPersons.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+          {filterPerson && (
+            <button
+              onClick={() => setFilterPerson('')}
+              className={`text-xs px-2.5 py-1.5 rounded-xl font-semibold flex-shrink-0 ${dark ? 'bg-gray-800 text-gray-400 hover:text-white' : 'bg-gray-100 text-gray-500 hover:text-gray-700'}`}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
 
       {finished.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16">
@@ -137,6 +181,17 @@ function TarixDetailModal({ order, dark, onClose }) {
               {order.izoh && <InfoRow label="Izoh" dark={dark}><span className={`text-sm italic ${textSec}`}>{order.izoh}</span></InfoRow>}
               <InfoRow label="Yaratilgan" dark={dark}><span className={`text-xs ${textSec}`}>{formatVaqt(order.yaratilganVaqt)}</span></InfoRow>
               <InfoRow label="Yakunlangan" dark={dark}><span className={`text-xs ${textSec}`}>{formatVaqt(order.yangilanganVaqt)}</span></InfoRow>
+            </Section>
+
+            {/* Kim qaysi bosqichni bajargan */}
+            <Section title="IJROCHILAR (kim bajardi)" dark={dark}>
+              {IJRO_LABELS.map(({ key, label }) => (
+                <InfoRow key={key} label={label} dark={dark}>
+                  {order.ijrochilar?.[key]
+                    ? <span className={`text-sm font-medium ${dark ? 'text-blue-400' : 'text-blue-600'}`}>{order.ijrochilar[key]}</span>
+                    : <span className={`text-sm ${textSec}`}>—</span>}
+                </InfoRow>
+              ))}
             </Section>
 
             {/* Tovarlar */}

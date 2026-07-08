@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS buyurtmalar (
   yangilangan_vaqt timestamptz    NOT NULL DEFAULT now()
 );
 ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tenant_id uuid;
+-- Har bir status bosqichini kim bajarganligi: { zayavka, yuvilmoqda, pardozda, dastavka }
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS ijrochilar jsonb NOT NULL DEFAULT '{}';
 
 
 -- ── 5. IZOHLAR ────────────────────────────────────────────────

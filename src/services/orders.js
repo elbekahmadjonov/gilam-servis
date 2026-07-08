@@ -31,6 +31,7 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
     yuvuvchi:         row.yuvuvchi?.ism
                         || (row.yuvuvchi?.rol ? capitalize(row.yuvuvchi.rol) : null),
     yuvuvchiId:       row.yuvuvchi_id  || null,
+    ijrochilar:       row.ijrochilar   || {},
     yaratilganVaqt:   row.yaratilgan_vaqt,
     yangilanganVaqt:  row.yangilangan_vaqt,
     izohlar:    izohlar.map(iz => ({

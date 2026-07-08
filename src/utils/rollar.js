@@ -7,8 +7,8 @@ export const ROLLAR = ['Owner', 'Admin', 'Dostavchik', 'Ishchi'];
 export const ALLOWED_TABS = {
   Owner:      ['/', '/qarz', '/tarix', '/mijozlar', '/statistika', '/hisob'],
   Admin:      ['/', '/qarz', '/tarix', '/mijozlar', '/statistika'],
-  Dostavchik: ['/', '/qarz', '/tarix'],
-  Ishchi:     ['/', '/tarix'],
+  Dostavchik: ['/', '/qarz', '/tarix', '/statistika'],
+  Ishchi:     ['/', '/tarix', '/statistika'],
 };
 
 // Har rol uchun faol bo'lgan statuslar (tugmalar ishlaydi)
