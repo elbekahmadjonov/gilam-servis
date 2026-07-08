@@ -33,18 +33,27 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: "Login yoki parol noto'g'ri" });
     }
 
-    // Birinchi login'da Telegram akkauntini shu tenantga bog'lash
+    // Telegram akkauntini shu xodimga bog'lash ("oxirgi kirgan g'olib").
+    // Login/parol bilan kirgan xodim Telegram'ni o'ziga oladi — shu bilan
+    // bitta telefondan boshqa xodimga o'tish mumkin bo'ladi.
     if (initData && tenant.bot_token) {
       const tgUser = validateInitData(initData, tenant.bot_token);
       if (tgUser?.id) {
-        await query(
-          `UPDATE xodimlar SET telegram_id = $1
-           WHERE id = $2
-             AND NOT EXISTS (
-               SELECT 1 FROM xodimlar
-               WHERE telegram_id = $1 AND tenant_id = $3 AND id <> $2)`,
-          [tgUser.id, xodim.id, tenant.id]
-        ).catch((e) => console.warn('[auth/login] telegram bog\'lash:', e.message));
+        try {
+          // Avval shu telegram_id boshqa xodimga bog'langan bo'lsa — uzamiz
+          await query(
+            `UPDATE xodimlar SET telegram_id = NULL
+             WHERE telegram_id = $1 AND tenant_id = $2 AND id <> $3`,
+            [tgUser.id, tenant.id, xodim.id]
+          );
+          // So'ng shu xodimga bog'laymiz
+          await query(
+            'UPDATE xodimlar SET telegram_id = $1 WHERE id = $2',
+            [tgUser.id, xodim.id]
+          );
+        } catch (e) {
+          console.warn('[auth/login] telegram bog\'lash:', e.message);
+        }
       }
     }
 

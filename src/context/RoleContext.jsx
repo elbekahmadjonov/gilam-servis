@@ -86,8 +86,12 @@ export function RoleProvider({ children }) {
       }
     }
 
-    // 2) Token yo'q (yoki eskirdi) — Telegram ichida bo'lsak avtomatik kiramiz
-    if (await telegramAutoLogin()) { setLoading(false); return; }
+    // 2) Token yo'q (yoki eskirdi) — Telegram ichida bo'lsak avtomatik kiramiz.
+    //    Ammo foydalanuvchi QO'LDA chiqqan bo'lsa — avtomatik qaytmaymiz,
+    //    login sahifasi chiqadi (boshqa xodim login/parol bilan kirishi uchun).
+    let manualLogout = false;
+    try { manualLogout = localStorage.getItem('gilam_logout') === '1'; } catch { /* skip */ }
+    if (!manualLogout && await telegramAutoLogin()) { setLoading(false); return; }
 
     // 3) Aks holda — login/parol sahifasi
     setXodim(null);
@@ -117,6 +121,7 @@ export function RoleProvider({ children }) {
       throw err;
     }
     setToken(res.token);
+    try { localStorage.removeItem('gilam_logout'); } catch { /* skip */ }
     const shaped = { ...res.xodim, rol: capitalizeRole(res.xodim.rol) };
     setXodim(shaped);
     setAuthError(null);
@@ -124,8 +129,11 @@ export function RoleProvider({ children }) {
   };
 
   // ── Logout ────────────────────────────────────────────
+  // Qo'lda chiqish belgisini qo'yamiz — keyingi ochilishda Telegram avtomatik
+  // kirish ishlamaydi, login sahifasi chiqadi (boshqa xodim kira olsin).
   const logout = async () => {
     setToken(null);
+    try { localStorage.setItem('gilam_logout', '1'); } catch { /* skip */ }
     disconnectSocket();
     setXodim(null);
   };
