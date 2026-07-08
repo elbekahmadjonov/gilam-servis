@@ -34,12 +34,11 @@ export default function Statistics({ orders = [], role }) {
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [xarajatlar, setXarajatlar] = useState([]);
 
-  const isOwner = role === 'Owner';
-
-  // Xarajatlarni faqat Owner ko'radi (API ham Owner bilan cheklangan)
+  // Hisob-kitob (daromad/xarajat/sof foyda) statistikada hammaga ko'rinadi.
+  // (Xarajat KIRITISH esa faqat Owner uchun — Hisob sahifasida.)
   useEffect(() => {
-    if (isOwner) getXarajatlar().then(setXarajatlar);
-  }, [isOwner]);
+    getXarajatlar().then(setXarajatlar);
+  }, []);
 
   const stats = computeStats(orders, period, period === 'sana' ? selectedDate : null);
   const xarajat = sumXarajatlar(xarajatlar, period, period === 'sana' ? selectedDate : null);
@@ -104,9 +103,8 @@ export default function Statistics({ orders = [], role }) {
           sub="Barcha vaqtlar" color="text-red-500" bgColor={dark ? 'bg-red-950' : 'bg-red-50'} />
       </div>
 
-      {/* Daromad tafsiloti — xarajatlar (faqat Owner) */}
-      {isOwner && (
-        <div className={`rounded-2xl p-4 border ${card} shadow-sm`}>
+      {/* Daromad tafsiloti — xarajatlar (hammaga) */}
+      <div className={`rounded-2xl p-4 border ${card} shadow-sm`}>
           <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
             Daromad tafsiloti — {periodLabel}
           </h3>
@@ -120,17 +118,14 @@ export default function Statistics({ orders = [], role }) {
               valueColor={sofFoyda >= 0 ? 'text-blue-500' : 'text-orange-500'} bold big />
           </div>
         </div>
-      )}
 
-      {/* Qarz tafsiloti (faqat Owner) — umumiy qarz alohida ko'rsatiladi */}
-      {isOwner && (
-        <div className={`rounded-2xl p-4 border ${card} shadow-sm`}>
-          <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
-            Qarz tafsiloti
-          </h3>
-          <Row dark={dark} label="Umumiy qarz (barcha vaqt)" value={`${formatSum(stats.jamilarQarz)} so'm`} valueColor="text-red-500" bold />
-        </div>
-      )}
+      {/* Qarz tafsiloti — umumiy qarz alohida ko'rsatiladi (hammaga) */}
+      <div className={`rounded-2xl p-4 border ${card} shadow-sm`}>
+        <h3 className={`text-xs font-bold uppercase tracking-wider mb-3 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>
+          Qarz tafsiloti
+        </h3>
+        <Row dark={dark} label="Umumiy qarz (barcha vaqt)" value={`${formatSum(stats.jamilarQarz)} so'm`} valueColor="text-red-500" bold />
+      </div>
 
       {/* Bar chart */}
       <div className={`rounded-2xl p-4 border ${card} shadow-sm`}>

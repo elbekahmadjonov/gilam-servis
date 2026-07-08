@@ -4,8 +4,9 @@ import { requireAuth, requireTenant, requireRole } from '../auth.js';
 import { requireTenantActive } from '../tenant.js';
 
 const router = Router();
-// Xarajatlar — faqat Owner ko'radi/tahrirlaydi (maxfiy moliyaviy ma'lumot)
-router.use(requireAuth, requireTenant, requireTenantActive, requireRole('Owner'));
+// O'qish — barcha tenant xodimlari (statistika hammaga ko'rinadi).
+// Yozish (PUT) esa faqat Owner uchun (pastda requireRole bilan).
+router.use(requireAuth, requireTenant, requireTenantActive);
 
 // ── GET /api/xarajatlar ── shu tenantning barcha kunlik xarajatlari ──
 router.get('/', async (req, res) => {
@@ -22,9 +23,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ── PUT /api/xarajatlar ── kunlik xarajatni saqlash (upsert) ──
+// ── PUT /api/xarajatlar ── kunlik xarajatni saqlash (faqat Owner) ──
 // Kirish: { sana: 'YYYY-MM-DD', gaz, obed, ishchi, boshqa, izoh }
-router.put('/', async (req, res) => {
+router.put('/', requireRole('Owner'), async (req, res) => {
   try {
     const { sana, gaz = 0, obed = 0, ishchi = 0, boshqa = 0, izoh = '' } = req.body || {};
     if (!sana || !/^\d{4}-\d{2}-\d{2}$/.test(String(sana))) {
