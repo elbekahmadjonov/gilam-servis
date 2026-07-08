@@ -34,14 +34,14 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
     ijrochilar:       row.ijrochilar   || {},
     yaratilganVaqt:   row.yaratilgan_vaqt,
     yangilanganVaqt:  row.yangilangan_vaqt,
-    izohlar:    izohlar.map(iz => ({
-      tur:     'matn',
-      matn:    iz.matn || '',
-      vaqt:    iz.vaqt,
-      muallif: iz.muallif?.ism || iz.muallif?.rol
-                 ? (iz.muallif.ism || capitalize(iz.muallif.rol))
-                 : "Noma'lum",
-    })),
+    izohlar:    izohlar.map(iz => {
+      const muallif = iz.muallif?.ism || iz.muallif?.rol
+        ? (iz.muallif.ism || capitalize(iz.muallif.rol))
+        : "Noma'lum";
+      return iz.rasm
+        ? { tur: 'rasm', rasm: iz.rasm, matn: iz.matn || '', vaqt: iz.vaqt, muallif }
+        : { tur: 'matn', matn: iz.matn || '', vaqt: iz.vaqt, muallif };
+    }),
     harakatlar: harakatlar.map(h => ({
       amal:    h.amal,
       vaqt:    h.vaqt,
@@ -233,6 +233,9 @@ export function sumXarajatlar(xarajatlar = [], period = 'kun', specificDate = nu
 
 export const getStats = computeStats;
 
-export async function addIzohRasm() {
-  console.warn('addIzohRasm: rasm yuklash hali sozlanmagan.');
+// Rasmli izoh qo'shish — base64 data URL serverga saqlanadi
+export async function addIzohRasm(orderId, base64, _role, source) {
+  const matn = source === 'kamera' ? '📷 Kamera' : source === 'galereya' ? '🖼 Galereya' : '';
+  await api.post(`/orders/${orderId}/izoh`, { rasm: base64, matn });
+  invalidateCache();
 }

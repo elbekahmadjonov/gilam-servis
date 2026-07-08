@@ -38,11 +38,12 @@ export default function OrderCard({ order, onDetail, onRefresh }) {
     try {
       showToast('Rasm saqlanmoqda...', 'info', 1500);
       const base64 = await compressImage(file, 1200, 0.7);
-      orderService.addIzohRasm(order.id, base64, role, source);
+      await orderService.addIzohRasm(order.id, base64, role, source);
       if (onRefresh) onRefresh();
       showToast('Rasm izoh sifatida saqlandi!', 'success');
     } catch (err) {
-      showToast('Rasmni saqlashda xato', 'error');
+      console.error('Rasm saqlash xatosi:', err);
+      showToast('Rasmni saqlashda xato: ' + (err?.message || ''), 'error');
     }
     // Reset input to allow same file re-selection
     e.target.value = '';

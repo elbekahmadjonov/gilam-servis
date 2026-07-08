@@ -105,6 +105,8 @@ CREATE TABLE IF NOT EXISTS izohlar (
   vaqt         timestamptz  NOT NULL DEFAULT now()
 );
 ALTER TABLE izohlar ADD COLUMN IF NOT EXISTS tenant_id uuid;
+-- Rasmli izoh (base64 data URL saqlanadi)
+ALTER TABLE izohlar ADD COLUMN IF NOT EXISTS rasm text;
 
 
 -- ── 6. HARAKATLAR (faoliyat tarixi) ──────────────────────────

@@ -186,15 +186,18 @@ router.patch('/:id', async (req, res) => {
   }
 });
 
-// ── POST /api/orders/:id/izoh ──── (buyurtma tenant'ga tegishli bo'lsa) ──
+// ── POST /api/orders/:id/izoh ──── (matn va/yoki rasm) ──
 router.post('/:id/izoh', async (req, res) => {
   try {
-    const { matn } = req.body || {};
+    const { matn, rasm } = req.body || {};
+    if (!matn && !rasm) {
+      return res.status(400).json({ error: 'Matn yoki rasm talab qilinadi' });
+    }
     const { rowCount } = await query(
-      `INSERT INTO izohlar (buyurtma_id, tenant_id, matn, muallif_id)
-       SELECT b.id, b.tenant_id, $2, $3 FROM buyurtmalar b
-       WHERE b.id = $1 AND b.tenant_id = $4`,
-      [req.params.id, matn || '', req.user.id, req.user.tenant_id]
+      `INSERT INTO izohlar (buyurtma_id, tenant_id, matn, rasm, muallif_id)
+       SELECT b.id, b.tenant_id, $2, $3, $4 FROM buyurtmalar b
+       WHERE b.id = $1 AND b.tenant_id = $5`,
+      [req.params.id, matn || '', rasm || null, req.user.id, req.user.tenant_id]
     );
     if (rowCount === 0) return res.status(404).json({ error: 'Buyurtma topilmadi' });
     res.status(201).json({ ok: true });
