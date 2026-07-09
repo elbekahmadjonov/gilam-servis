@@ -10,6 +10,7 @@ import Orders from './pages/Orders';
 import NewOrder from './pages/NewOrder';
 import Debt from './pages/Debt';
 import History from './pages/History';
+import Cancelled from './pages/Cancelled';
 import Customers from './pages/Customers';
 import Statistics from './pages/Statistics';
 import Hisob from './pages/Hisob';
@@ -267,6 +268,7 @@ function AppContent() {
           } />
           <Route path="/qarz"       element={<Debt       orders={orders} onRefresh={refresh} />} />
           <Route path="/tarix"      element={<History    orders={orders} />} />
+          <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
           <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
           <Route path="/statistika" element={<Statistics orders={orders} role={role} />} />
           {role === 'Owner' && (
