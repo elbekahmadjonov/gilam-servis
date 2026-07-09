@@ -5,9 +5,11 @@ import App from './App.jsx'
 import SuperApp from './super/SuperApp.jsx'
 import { startTranslit, isKiril } from './utils/translit'
 
-// gilamadmin.qariya.uz → Super Admin panel; boshqa domenlar → mijoz ilovasi
+// Super Admin panel domenlari: gilamadmin.qariya.uz yoki admin.gilam-servis.uz
+// Boshqa barcha domenlar → mijoz (Telegram Mini App) ilovasi.
 const isSuper = typeof window !== 'undefined'
-  && window.location.hostname.startsWith('gilamadmin')
+  && (window.location.hostname.startsWith('gilamadmin')
+      || window.location.hostname.startsWith('admin.'))
 
 // Super panel desktop — mobil 480px cheklovini olib tashlaymiz
 if (isSuper) document.body.classList.add('super')

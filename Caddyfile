@@ -7,7 +7,8 @@
 }
 
 # ── Web client (Telegram Mini App shu URL'da ochiladi) ──
-gilam.qariya.uz {
+# Yangi domen (app.gilam-servis.uz) + eski (gilam.qariya.uz) parallel ishlaydi.
+gilam.qariya.uz, app.gilam-servis.uz {
 	encode gzip zstd
 	root * /srv
 	try_files {path} /index.html
@@ -19,7 +20,7 @@ gilam.qariya.uz {
 }
 
 # ── Super Admin panel (bitta build, hostname bo'yicha tarmoqlanadi) ──
-gilamadmin.qariya.uz {
+gilamadmin.qariya.uz, admin.gilam-servis.uz {
 	encode gzip zstd
 	root * /srv
 	try_files {path} /index.html
@@ -30,7 +31,7 @@ gilamadmin.qariya.uz {
 }
 
 # ── Backend API + Socket.io ──────────────────────────
-gilamapi.qariya.uz {
+gilamapi.qariya.uz, api.gilam-servis.uz {
 	encode gzip zstd
 	# reverse_proxy WebSocket'ni avtomatik qo'llab-quvvatlaydi
 	reverse_proxy api:3000
