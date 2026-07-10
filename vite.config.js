@@ -8,15 +8,11 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
+      // Service worker'ni o'chiruvchi rejim — keshlash muammosini oldini oladi.
+      // Capacitor (APK) ichida SW eski versiyani keshlab qolardi; bu uni tozalaydi.
+      selfDestroying: true,
       registerType: 'autoUpdate',
-      // manifest.json ni public/ dan o'zimiz boshqaramiz
       manifest: false,
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Navigatsiya so'rovlarini index.html ga yo'naltirish (SPA)
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-      },
     }),
   ],
 })

@@ -33,3 +33,9 @@ android/local.properties
 *.njsproj
 *.sln
 *.sw?
+
+# Build artifacts va mahalliy sinov fayllari
+*.apk
+.env.development
+server/sample_orders.sql
+server/add_test_users.mjs

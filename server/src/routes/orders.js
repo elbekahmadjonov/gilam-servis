@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { requireAuth, requireTenant, requireRole } from '../auth.js';
 import { requireTenantActive, buyurtmaLimitOshdi } from '../tenant.js';
 import { emitOrdersChanged } from '../realtime.js';
+import { notifyOrderStatus } from '../notify.js';
 
 const router = Router();
 // Barcha buyurtma endpointlari: auth + tenant konteksti + tenant faolligi
@@ -138,6 +139,8 @@ router.post('/', async (req, res) => {
     ).catch(() => {});
 
     emitOrdersChanged(req.user.tenant_id);
+    // Yangi buyurtma → zayavka bildirishnomasi (Owner + Dostavchik)
+    notifyOrderStatus(req.user.tenant_id, newRow.id, 'yangi').catch(() => {});
     res.status(201).json(newRow);
   } catch (err) {
     console.error('[orders/create]', err.message);
@@ -179,6 +182,10 @@ router.patch('/:id', async (req, res) => {
     if (rowCount === 0) return res.status(404).json({ error: 'Buyurtma topilmadi' });
 
     emitOrdersChanged(req.user.tenant_id);
+    // Status o'zgargan bo'lsa — rol-asosli bildirishnoma
+    if ('status' in changes) {
+      notifyOrderStatus(req.user.tenant_id, req.params.id, changes.status).catch(() => {});
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('[orders/update]', err.message);

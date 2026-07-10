@@ -14,10 +14,13 @@ import Cancelled from './pages/Cancelled';
 import Customers from './pages/Customers';
 import Statistics from './pages/Statistics';
 import Hisob from './pages/Hisob';
+import Chat from './pages/Chat';
 import Login from './pages/Login';
 import OrderModal from './components/OrderModal';
+import PullToRefresh from './components/PullToRefresh';
 import { getAll, search, hasCachedOrders, invalidateCache } from './services/orders';
 import { loadTemplates } from './services/templates';
+import { initPush, showLocalNotif } from './lib/push';
 
 // ── 10 soniyalik timeout ────────────────────────────────
 async function withTimeout(promise, ms = 10000) {
@@ -104,8 +107,9 @@ function BlockedScreen() {
 
 // ── Asosiy ilova ────────────────────────────────────────
 function AppContent() {
-  const { role, loading, authError, blocked, retryInit } = useRole();
+  const { role, xodim, loading, authError, blocked, retryInit } = useRole();
   const { dark } = useTheme();
+  const pushInitRef = useRef(false);
 
   const [orders,          setOrders]          = useState([]);
   const [ordersLoading,   setOrdersLoading]   = useState(false);
@@ -162,6 +166,32 @@ function AppContent() {
       console.warn('Real-time ulanmadi:', err);
     }
   }, [refresh]);
+
+  // ── Bildirishnomalar: push init + socket listenerlari ──
+  useEffect(() => {
+    if (!role) return;
+
+    // FCM/local ruxsat + token (faqat bir marta)
+    if (!pushInitRef.current) { pushInitRef.current = true; initPush(); }
+
+    // Rol-asosli status bildirishnomasi
+    const onBildirishnoma = ({ rollar, title, body }) => {
+      if (Array.isArray(rollar) && !rollar.includes(role)) return;
+      showLocalNotif(title, body);
+    };
+    // Chat xabari (o'z xabari emas va chat ochiq emas bo'lsa)
+    const onChat = (x) => {
+      if (x.muallif_id === xodim?.id) return;
+      if (window.location.pathname === '/chat') return;
+      showLocalNotif(`💬 ${x.muallif_ism || 'Xodim'}`, x.matn);
+    };
+    socket.on('bildirishnoma', onBildirishnoma);
+    socket.on('chat:yangi', onChat);
+    return () => {
+      socket.off('bildirishnoma', onBildirishnoma);
+      socket.off('chat:yangi', onChat);
+    };
+  }, [role, xodim]);
 
   // ── Ilk yuklash + realtime ────────────────────────────
   useEffect(() => {
@@ -259,22 +289,25 @@ function AppContent() {
           <div className="h-0.5 bg-blue-500 animate-pulse w-full" />
         )}
 
-        <Routes>
-          <Route path="/" element={
-            <Orders orders={orders} onDetail={setSelectedOrder} onRefresh={refresh} loading={ordersLoading} />
-          } />
-          <Route path="/yangi" element={
-            <NewOrder onCreated={() => { refresh(); navigate('/'); }} />
-          } />
-          <Route path="/qarz"       element={<Debt       orders={orders} onRefresh={refresh} />} />
-          <Route path="/tarix"      element={<History    orders={orders} />} />
-          <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
-          <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
-          <Route path="/statistika" element={<Statistics orders={orders} role={role} />} />
-          {role === 'Owner' && (
-            <Route path="/hisob"    element={<Hisob      orders={orders} />} />
-          )}
-        </Routes>
+        <PullToRefresh onRefresh={async () => { invalidateCache(); await refresh(); }}>
+          <Routes>
+            <Route path="/" element={
+              <Orders orders={orders} onDetail={setSelectedOrder} onRefresh={refresh} loading={ordersLoading} />
+            } />
+            <Route path="/yangi" element={
+              <NewOrder onCreated={() => { refresh(); navigate('/'); }} />
+            } />
+            <Route path="/qarz"       element={<Debt       orders={orders} onRefresh={refresh} />} />
+            <Route path="/tarix"      element={<History    orders={orders} />} />
+            <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
+            <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
+            <Route path="/statistika" element={<Statistics orders={orders} role={role} />} />
+            <Route path="/chat"       element={<Chat />} />
+            {role === 'Owner' && (
+              <Route path="/hisob"    element={<Hisob      orders={orders} />} />
+            )}
+          </Routes>
+        </PullToRefresh>
       </main>
 
       <Footer orders={orders} />

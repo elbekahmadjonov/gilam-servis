@@ -7,10 +7,14 @@ const config: CapacitorConfig = {
   server: {
     // HTTPS sxemasi — geolokatsiya API faqat HTTPS da ishlaydi
     androidScheme: 'https',
+    // Lokal sinov: http:// LAN backend'iga ulanish uchun cleartext
+    cleartext: true,
   },
   android: {
     // Splash screen oq fon
     backgroundColor: '#ffffff',
+    // https sahifadan http (LAN) API'ga so'rov yuborishga ruxsat (mixed content)
+    allowMixedContent: true,
   },
 };
 

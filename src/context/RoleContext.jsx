@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { api, setToken, getToken } from '../lib/api';
 import { disconnectSocket } from '../lib/socket';
 import { isTelegram, getInitData, initTelegram } from '../lib/telegram';
+import { removePushToken } from '../lib/push';
 
 const SESSION_TIMEOUT = 15000; // 15 soniya — undan keyin xato
 
@@ -132,6 +133,7 @@ export function RoleProvider({ children }) {
   // Qo'lda chiqish belgisini qo'yamiz — keyingi ochilishda Telegram avtomatik
   // kirish ishlamaydi, login sahifasi chiqadi (boshqa xodim kira olsin).
   const logout = async () => {
+    await removePushToken().catch(() => {});
     setToken(null);
     try { localStorage.setItem('gilam_logout', '1'); } catch { /* skip */ }
     disconnectSocket();

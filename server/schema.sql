@@ -133,6 +133,32 @@ CREATE TABLE IF NOT EXISTS narx_shablonlari (
 ALTER TABLE narx_shablonlari ADD COLUMN IF NOT EXISTS tenant_id uuid;
 
 
+-- ── 7b. CHAT XABARLARI (tenant ichidagi umumiy chat) ─────────
+
+CREATE TABLE IF NOT EXISTS chat_xabarlar (
+  id           bigserial    PRIMARY KEY,
+  tenant_id    uuid         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  muallif_id   uuid         REFERENCES xodimlar(id) ON DELETE SET NULL,
+  matn         text         NOT NULL DEFAULT '',
+  tahrirlangan boolean      NOT NULL DEFAULT false,
+  vaqt         timestamptz  NOT NULL DEFAULT now()
+);
+ALTER TABLE chat_xabarlar ADD COLUMN IF NOT EXISTS tahrirlangan boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_chat_tenant_vaqt ON chat_xabarlar(tenant_id, vaqt DESC);
+
+
+-- ── 7c. QURILMA TOKENLARI (FCM push bildirishnomalar) ────────
+
+CREATE TABLE IF NOT EXISTS qurilma_tokenlar (
+  token       text         PRIMARY KEY,
+  xodim_id    uuid         REFERENCES xodimlar(id) ON DELETE CASCADE,
+  tenant_id   uuid         REFERENCES tenants(id) ON DELETE CASCADE,
+  rol         text,
+  yangilangan timestamptz  NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_token_tenant_rol ON qurilma_tokenlar(tenant_id, rol);
+
+
 -- ================================================================
 -- 8. BACKFILL — mavjud (tenant_id IS NULL) satrlarni default'ga
 -- ================================================================
