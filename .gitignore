@@ -39,3 +39,7 @@ android/local.properties
 .env.development
 server/sample_orders.sql
 server/add_test_users.mjs
+
+# Firebase maxfiy fayllar (git ga kirmasin!)
+android/app/google-services.json
+server/firebase-admin.json

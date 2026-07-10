@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Gilam Yuvish</string>
-    <string name="title_activity_main">Gilam Yuvish</string>
+    <string name="app_name">Musaffo</string>
+    <string name="title_activity_main">Musaffo</string>
     <string name="package_name">uz.gilam.yuvish</string>
     <string name="custom_url_scheme">uz.gilam.yuvish</string>
 </resources>

@@ -5,7 +5,7 @@ import { api } from './api';
 // FCM (Firebase) push — google-services.json qo'shilgandan keyin true qilinadi.
 // false bo'lsa: PushNotifications.register() chaqirilmaydi (Firebase'siz crash bo'lmaydi).
 // Local notification (socket orqali) baribir ishlaydi.
-const FCM_ENABLED = false;
+const FCM_ENABLED = true;
 
 let currentToken = null;
 

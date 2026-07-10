@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId:   'uz.gilam.yuvish',
-  appName: 'Gilam Yuvish',
+  appName: 'Musaffo',
   webDir:  'dist',
   server: {
     // HTTPS sxemasi — geolokatsiya API faqat HTTPS da ishlaydi

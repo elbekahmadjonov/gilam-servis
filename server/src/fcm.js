@@ -7,12 +7,12 @@ let messaging = null;
 try {
   const saPath = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (saPath && fs.existsSync(saPath)) {
-    const admin = (await import('firebase-admin')).default;
-    admin.initializeApp({
-      credential: admin.credential.cert(JSON.parse(fs.readFileSync(saPath, 'utf8'))),
-    });
-    messaging = admin.messaging();
-    console.log('[fcm] Firebase Admin ishga tushdi');
+    const { initializeApp, cert, getApps } = await import('firebase-admin/app');
+    const { getMessaging } = await import('firebase-admin/messaging');
+    const sa = JSON.parse(fs.readFileSync(saPath, 'utf8'));
+    const app = getApps().length ? getApps()[0] : initializeApp({ credential: cert(sa) });
+    messaging = getMessaging(app);
+    console.log('[fcm] Firebase Admin ishga tushdi ✅');
   } else {
     console.log('[fcm] FIREBASE_SERVICE_ACCOUNT yo\'q — push o\'chirilgan (lokal rejim)');
   }
