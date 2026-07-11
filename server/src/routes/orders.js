@@ -169,6 +169,12 @@ router.patch('/:id', async (req, res) => {
       params.push(req.user.id);
     }
 
+    // Buyurtma "tugadi"ga o'tsa — tugatilgan vaqtni birinchi marta yozamiz
+    // (COALESCE — allaqachon yozilgan bo'lsa o'zgarmaydi)
+    if (changes.status === 'tugadi') {
+      sets.push('tugatilgan_vaqt = COALESCE(tugatilgan_vaqt, now())');
+    }
+
     if (sets.length === 0) {
       return res.status(400).json({ error: 'O\'zgartirish uchun maydon yo\'q' });
     }

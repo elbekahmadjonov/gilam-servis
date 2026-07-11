@@ -93,6 +93,11 @@ CREATE TABLE IF NOT EXISTS buyurtmalar (
 ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tenant_id uuid;
 -- Har bir status bosqichini kim bajarganligi: { zayavka, yuvilmoqda, pardozda, dastavka }
 ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS ijrochilar jsonb NOT NULL DEFAULT '{}';
+-- Buyurtma tugagan (to'lov qilingan) aniq vaqt — statistika shu bo'yicha
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tugatilgan_vaqt timestamptz;
+-- Mavjud tugagan buyurtmalarni backfill (yangilangan vaqtni taxminiy sana sifatida)
+UPDATE buyurtmalar SET tugatilgan_vaqt = yangilangan_vaqt
+  WHERE status = 'tugadi' AND tugatilgan_vaqt IS NULL;
 
 
 -- ── 5. IZOHLAR ────────────────────────────────────────────────

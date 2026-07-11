@@ -32,6 +32,7 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
                         || (row.yuvuvchi?.rol ? capitalize(row.yuvuvchi.rol) : null),
     yuvuvchiId:       row.yuvuvchi_id  || null,
     ijrochilar:       row.ijrochilar   || {},
+    tugatilganVaqt:   row.tugatilgan_vaqt || null,
     yaratilganVaqt:   row.yaratilgan_vaqt,
     yangilanganVaqt:  row.yangilangan_vaqt,
     izohlar:    izohlar.map(iz => {
@@ -131,9 +132,10 @@ export function search(query, orders = []) {
   );
 }
 
-// Buyurtma davrga (period) tegishlimi — yangilangan vaqti bo'yicha
-function davrgaKiradi(o, period, now, specificDate) {
-  const d = new Date(o.yangilanganVaqt);
+// Berilgan sana davrga (period) kiradimi?
+function sanaDavrda(dateVal, period, now, specificDate) {
+  if (!dateVal) return false;
+  const d = new Date(dateVal);
   if (period === 'kun') {
     return d.toDateString() === now.toDateString();
   } else if (period === 'hafta') {
@@ -147,6 +149,12 @@ function davrgaKiradi(o, period, now, specificDate) {
            d.getDate()     === t.getDate();
   }
   return true;
+}
+
+// Buyurtma tugagan (to'lov qilingan) sana — statistika shu bo'yicha.
+// tugatilganVaqt bo'lmasa (eski data) — yangilanganVaqt taxminiy.
+function tugaganSana(o) {
+  return o.tugatilganVaqt || o.yangilanganVaqt;
 }
 
 // Bir buyurtmadagi mahsulot hajmlari (m², metr, dona, kg)
@@ -172,19 +180,20 @@ function orderHajmi(o) {
 export function computeStats(orders = [], period = 'kun', specificDate = null) {
   const now = new Date();
 
-  // Davrga tegishli buyurtmalar (barcha statuslar) — hajm uchun
-  const davrOrders = orders.filter(o => davrgaKiradi(o, period, now, specificDate));
-  // Shu davrda tugagan buyurtmalar — daromad uchun
-  const tugadiDavr = davrOrders.filter(o => o.status === 'tugadi');
+  // Shu davrda TUGAGAN (to'lov qilingan) buyurtmalar — tugatilgan sana bo'yicha.
+  // Daromad va hajm shu buyurtmalardan hisoblanadi.
+  const tugadiDavr = orders.filter(
+    o => o.status === 'tugadi' && sanaDavrda(tugaganSana(o), period, now, specificDate)
+  );
 
   const statusCounts = {};
   ['yangi', 'jarayonda', 'qadoqlash', 'dostavka', 'tugadi', 'otkaz'].forEach(s => {
     statusCounts[s] = orders.filter(o => o.status === s).length;
   });
 
-  // Mahsulot hajmlari (davr bo'yicha)
+  // Mahsulot hajmlari (shu davrda tugagan buyurtmalar bo'yicha)
   const hajm = { gilamM2: 0, korpachaMetr: 0, pardaKg: 0, gilamSoni: 0, odealSoni: 0, korpaSoni: 0 };
-  davrOrders.forEach(o => {
+  tugadiDavr.forEach(o => {
     const h = orderHajmi(o);
     hajm.gilamM2      += h.gilamM2;
     hajm.korpachaMetr += h.korpachaMetr;
