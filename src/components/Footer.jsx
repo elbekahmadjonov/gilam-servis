@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Tablet, HandCoins, Clock, Ban, Wallet, Users, BarChart3, MessageCircle } from 'lucide-react';
+import { Tablet, HandCoins, Clock, Ban, Wallet, Users, BarChart3 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import { allowedTabs } from '../utils/rollar';
@@ -11,7 +11,6 @@ const ALL_TABS = [
   { path: '/otkaz',      label: 'Otkaz',        icon: Ban       },
   { path: '/mijozlar',   label: 'Mijozlar',     icon: Users     },
   { path: '/statistika', label: 'Statistika',   icon: BarChart3 },
-  { path: '/chat',       label: 'Chat',         icon: MessageCircle },
   { path: '/hisob',      label: 'Hisob',        icon: Wallet    },
 ];
 

@@ -12,7 +12,6 @@ import orderRoutes from './routes/orders.js';
 import templateRoutes from './routes/templates.js';
 import xarajatRoutes from './routes/xarajatlar.js';
 import superRoutes from './routes/super.js';
-import chatRoutes from './routes/chat.js';
 import deviceRoutes from './routes/devices.js';
 
 const app = express();
@@ -39,7 +38,6 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/xarajatlar', xarajatRoutes);
 app.use('/api/super', superRoutes);
-app.use('/api/chat', chatRoutes);
 app.use('/api/devices', deviceRoutes);
 
 // 404

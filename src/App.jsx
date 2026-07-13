@@ -14,7 +14,6 @@ import Cancelled from './pages/Cancelled';
 import Customers from './pages/Customers';
 import Statistics from './pages/Statistics';
 import Hisob from './pages/Hisob';
-import Chat from './pages/Chat';
 import Login from './pages/Login';
 import OrderModal from './components/OrderModal';
 import PullToRefresh from './components/PullToRefresh';
@@ -179,17 +178,9 @@ function AppContent() {
       if (Array.isArray(rollar) && !rollar.includes(role)) return;
       showLocalNotif(title, body);
     };
-    // Chat xabari (o'z xabari emas va chat ochiq emas bo'lsa)
-    const onChat = (x) => {
-      if (x.muallif_id === xodim?.id) return;
-      if (window.location.pathname === '/chat') return;
-      showLocalNotif(`💬 ${x.muallif_ism || 'Xodim'}`, x.matn);
-    };
     socket.on('bildirishnoma', onBildirishnoma);
-    socket.on('chat:yangi', onChat);
     return () => {
       socket.off('bildirishnoma', onBildirishnoma);
-      socket.off('chat:yangi', onChat);
     };
   }, [role, xodim]);
 
@@ -302,7 +293,6 @@ function AppContent() {
             <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
             <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
             <Route path="/statistika" element={<Statistics orders={orders} role={role} />} />
-            <Route path="/chat"       element={<Chat />} />
             {role === 'Owner' && (
               <Route path="/hisob"    element={<Hisob      orders={orders} />} />
             )}

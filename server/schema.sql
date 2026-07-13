@@ -138,18 +138,11 @@ CREATE TABLE IF NOT EXISTS narx_shablonlari (
 ALTER TABLE narx_shablonlari ADD COLUMN IF NOT EXISTS tenant_id uuid;
 
 
--- ── 7b. CHAT XABARLARI (tenant ichidagi umumiy chat) ─────────
+-- ── 7b. CHAT (olib tashlandi) ────────────────────────────────
+-- Chat bo'limi ilovadan olib tashlandi — jadval va ma'lumotlari o'chiriladi.
+-- Faqat chat jadvali tushadi, boshqa jadvallarga ta'sir qilmaydi.
 
-CREATE TABLE IF NOT EXISTS chat_xabarlar (
-  id           bigserial    PRIMARY KEY,
-  tenant_id    uuid         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  muallif_id   uuid         REFERENCES xodimlar(id) ON DELETE SET NULL,
-  matn         text         NOT NULL DEFAULT '',
-  tahrirlangan boolean      NOT NULL DEFAULT false,
-  vaqt         timestamptz  NOT NULL DEFAULT now()
-);
-ALTER TABLE chat_xabarlar ADD COLUMN IF NOT EXISTS tahrirlangan boolean NOT NULL DEFAULT false;
-CREATE INDEX IF NOT EXISTS idx_chat_tenant_vaqt ON chat_xabarlar(tenant_id, vaqt DESC);
+DROP TABLE IF EXISTS chat_xabarlar;
 
 
 -- ── 7c. QURILMA TOKENLARI (FCM push bildirishnomalar) ────────

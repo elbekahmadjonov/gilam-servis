@@ -5,7 +5,9 @@ import { api } from './api';
 // FCM (Firebase) push — google-services.json qo'shilgandan keyin true qilinadi.
 // false bo'lsa: PushNotifications.register() chaqirilmaydi (Firebase'siz crash bo'lmaydi).
 // Local notification (socket orqali) baribir ishlaydi.
-const FCM_ENABLED = true;
+// Bildirishnomalar endi Telegram bot orqali yuboriladi (ishonchliroq).
+// FCM o'chirilgan — local notification (socket, ilova ochiq) ishlab turadi.
+const FCM_ENABLED = false;
 
 let currentToken = null;
 

@@ -5,10 +5,10 @@ export const ROLLAR = ['Owner', 'Admin', 'Dostavchik', 'Ishchi'];
 // Har rol uchun ko'rinadigan tab yo'llari.
 // Owner = Admin bilan bir xil, ustiga faqat unda ko'rinadigan "/hisob".
 export const ALLOWED_TABS = {
-  Owner:      ['/', '/qarz', '/tarix', '/otkaz', '/mijozlar', '/statistika', '/chat', '/hisob'],
-  Admin:      ['/', '/qarz', '/tarix', '/otkaz', '/mijozlar', '/statistika', '/chat'],
-  Dostavchik: ['/', '/qarz', '/tarix', '/otkaz', '/statistika', '/chat'],
-  Ishchi:     ['/', '/tarix', '/otkaz', '/statistika', '/chat'],
+  Owner:      ['/', '/qarz', '/tarix', '/otkaz', '/mijozlar', '/statistika', '/hisob'],
+  Admin:      ['/', '/qarz', '/tarix', '/otkaz', '/mijozlar', '/statistika'],
+  Dostavchik: ['/', '/qarz', '/tarix', '/otkaz', '/statistika'],
+  Ishchi:     ['/', '/tarix', '/otkaz', '/statistika'],
 };
 
 // Har rol uchun faol bo'lgan statuslar (tugmalar ishlaydi)
