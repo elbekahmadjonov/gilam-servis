@@ -36,7 +36,11 @@ kelishilgan):
 - Buyurtma "dostavka"ga o'tganda SMS avtomatik navbatga qo'yiladi, shu bilan
   birga SMS sahifasida qo'lda yuborish/qayta yuborish ham bo'ladi.
 - Gateway telefon uchun alohida, minimal Capacitor ilovasi (asosiy ishchi
-  ilovadan mustaqil), 6 xonali kod orqali ulanadi.
+  ilovadan mustaqil), 6 xonali kod **yoki QR kod skanerlash** orqali ulanadi
+  — shu bilan istalgan telefon (nafaqat oldindan shu maqsadda o'rnatilgan
+  bitta qurilma) tez ulanadi, chunki QR server manzilini ham o'z ichiga
+  oladi (qo'lda URL kiritish shart emas).
+- Barcha qism (backend + frontend) lokal muhitda sinaladi.
 
 ## Ma'lumotlar bazasi
 
@@ -102,7 +106,7 @@ qilgan).
 | GET | `/template` | joriy SMS shablonini qaytaradi |
 | PUT | `/template` | shablonni yangilaydi |
 | GET | `/phone` | telefon holati (ulangan/ulanmagan, qurilma, operator, oxirgi faollik) |
-| POST | `/phone/code` | 6 xonali ulanish kodi yaratadi (10 daqiqa amal qiladi) |
+| POST | `/phone/code` | 6 xonali ulanish kodi yaratadi (10 daqiqa amal qiladi), javobda QR uchun `{kod, api_url}` ham qaytadi |
 | DELETE | `/phone` | uzish — token bekor qilinadi, `ulangan=false` |
 | GET | `/queue` | "dostavka" statusidagi buyurtmalar + har birining SMS holati (join `sms_queue`) |
 | POST | `/send` | `{buyurtma_id}` — bitta buyurtmani navbatga qo'yadi/qayta yuboradi |
@@ -132,13 +136,22 @@ bot_token yo'q holati kabi).
   funksiyalar (`getPhoneStatus`, `requestConnectCode`, `disconnectPhone`,
   `getTemplate`, `saveTemplate`, `getSmsQueue`, `sendOne`, `sendAll`).
 - `src/pages/Sms.jsx` — uch blok:
-  1. Telefon holati kartasi + "Ulanish kodi" / "Uzish" tugmasi + kod modali.
+  1. Telefon holati kartasi + "Ulanish kodi" tugmasi + modal: modalda **QR
+     kod** (katta, skanerlash uchun) va uning tagida bir xil ma'lumotdan
+     hosil bo'lgan **6 xonali raqam** (QR ishlamasa/kamera yo'q holat uchun
+     qo'lda kiritish zaxira varianti). "Uzish" tugmasi.
   2. Shablon matni (`textarea`) + "Saqlash".
   3. "Dostavka" buyurtmalari ro'yxati, har birida holat belgisi
      (Yuborilmagan / Yuborildi / Xato) va "SMS yuborish" tugmasi,
      tepada "Hammaga yuborish".
+
   Mavjud sahifalar uslubiga mos (`Debt.jsx` naqshi), `PullToRefresh` bilan
   o'ralgan, 8 soniyalik intervalda avtomatik yangilanadi.
+- QR generatsiya — `qrcode` npm paketi (client-side, tarmoqqa chiqmaydi),
+  QR matni: `JSON.stringify({ url: <API bazaviy manzili>, kod })`.
+  `<API bazaviy manzili>` — ilova o'zi ishlatayotgan `VITE_API_URL` (yoki
+  joriy `location.origin + '/api'`), shuning uchun lokal sinovda ham,
+  productionda ham to'g'ri manzil avtomatik kodlanadi.
 - `src/utils/rollar.js` — `ALLOWED_TABS.Owner`ga `/sms` qo'shiladi (faqat Owner).
 - `src/components/Footer.jsx` — yangi tab (`MessageSquare` ikonkasi, `lucide-react`).
 - `src/App.jsx` — `{role === 'Owner' && <Route path="/sms" element={<Sms/>} />}`,
@@ -150,17 +163,24 @@ Yangi papka: `gilam-app/sms-gateway/` — asosiy ishchi ilovadan mustaqil,
 o'z `package.json`, `index.html`, minimal vanilla JS UI, o'z
 `capacitor.config.ts`.
 
-UI: kod kiritish maydoni + "Ulash" tugmasi + holat matni ("Ulangan" /
-"Ulanmagan"). Ulangandan keyin fonda har 5 soniyada
-`GET /api/sms/gateway/queue`ni so'raydi, yangi SMS bo'lsa native plugin
-orqali yuboradi, keyin `POST /api/sms/gateway/confirm` bilan xabar beradi.
-Token qurilmada `localStorage`da saqlanadi (qayta ochilganda kod qayta
-kiritilmasin uchun).
+UI: "QR skanerlash" tugmasi (kamera ochiladi, QR o'qilgach `{url, kod}`
+avtomatik ajratiladi) **va** qo'lda kiritish varianti (server manzili +
+6 xonali kod maydonlari, kamera ishlamasa/ruxsat berilmasa uchun). Ulash
+bosilgach `POST {url}/api/sms/gateway/connect` chaqiriladi. Muvaffaqiyatli
+ulanish holati matni ("Ulangan" / "Ulanmagan"). Ulangandan keyin fonda har
+5 soniyada `GET {url}/api/sms/gateway/queue`ni so'raydi, yangi SMS bo'lsa
+native plugin orqali yuboradi, keyin `POST {url}/api/sms/gateway/confirm`
+bilan xabar beradi. Token va server manzili qurilmada `localStorage`da
+saqlanadi (qayta ochilganda qayta ulanish shart emas).
+
+QR skanerlash uchun Capacitor barcode-scanning plugin (masalan
+`@capacitor-mlkit/barcode-scanning`) — `CAMERA` ruxsati talab qiladi.
 
 Custom native Capacitor plugin (`SmsGatewayPlugin.java`, Android):
 `android.telephony.SmsManager` orqali haqiqiy SMS yuboradi.
-`AndroidManifest.xml`ga `SEND_SMS` ruxsati qo'shiladi, runtime permission
-so'rovi ilova ochilganda amalga oshiriladi.
+`AndroidManifest.xml`ga `SEND_SMS` (va QR uchun `CAMERA`) ruxsati
+qo'shiladi, runtime permission so'rovlari ilova ochilganda amalga
+oshiriladi.
 
 **Cheklov:** bu native plugin va Android loyihasi kodi to'liq yoziladi, lekin
 ushbu muhitda Android SDK yo'qligi sababli **APK'ga kompilyatsiya qilib
@@ -183,13 +203,24 @@ kerak bo'ladi.
 
 ## Testlash rejasi
 
-- Backend: `npm run migrate` bilan yangi jadval/ustunlarni qo'llash,
-  keyin endpointlarni curl orqali qo'lda tekshirish (agar lokal
-  `DATABASE_URL` mavjud bo'lsa).
-- Frontend: dev serverda (`npm run dev`) Owner sifatida kirib, SMS sahifasini
-  qo'lda tekshirish — kod yaratish, shablon saqlash, ro'yxat ko'rinishi.
-- Gateway ilova/native plugin: kod yoziladi, lekin qurilmada/emulyatorda
-  sinalmaydi (Android SDK yo'q) — buni implementatsiya oxirida alohida
+Foydalanuvchi talabiga ko'ra — **barcha sinovlanadigan qism lokal muhitda
+sinaladi:**
+
+- Backend: lokal Postgres'ga `npm run migrate` bilan yangi jadval/ustunlar
+  qo'llanadi, so'ng barcha `/api/sms/*` endpointlari (Owner va gateway
+  tomonlari) curl/skript orqali qo'lda sinaladi — kod yaratish → gateway
+  connect → queue → confirm → sahifada holat yangilanishi, to'liq oqim
+  bir marta uchidan-uchigacha ishlatib ko'riladi.
+- Frontend: lokal dev serverda (`npm run dev`) Owner sifatida kirib, SMS
+  sahifasi qo'lda tekshiriladi — QR/kod yaratish, shablon saqlash, ro'yxat
+  va holatlar to'g'ri chiqishi.
+- Gateway veb qismi (QR skanerlash va SMS yuborishdan tashqari hammasi):
+  brauzerda ochib, `gateway/connect` va `gateway/queue` chaqiruvlarini
+  qo'lda sinash mumkin (kamera/SmsManager'siz, faqat tarmoq oqimini
+  tekshirish uchun).
+- Gateway native qism (haqiqiy QR skanerlash va SMS yuborish): kod to'liq
+  yoziladi, lekin ushbu muhitda Android SDK yo'qligi sababli qurilmada/
+  emulyatorda sinalmaydi — buni implementatsiya oxirida alohida
   eslatib o'tiladi.
 
 ## Qamrov chegarasi (scope)
