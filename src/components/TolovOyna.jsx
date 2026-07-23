@@ -45,7 +45,7 @@ export default function TolovOyna({ order, dark, onClose, onSave }) {
         <div className="flex justify-center pt-3"><div className={`w-10 h-1 rounded-full ${dark ? 'bg-gray-700' : 'bg-gray-200'}`} /></div>
 
         <div className={`flex items-center justify-between px-5 py-3 border-b ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
-          <h3 className={`text-base font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>To'lov — #{order.id}</h3>
+          <h3 className={`text-base font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>To'lov — #{order.raqam}</h3>
           <button onClick={onClose} className={`w-8 h-8 rounded-full flex items-center justify-center ${dark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
             <X size={16} />
           </button>

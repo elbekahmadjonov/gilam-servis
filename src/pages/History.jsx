@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { PackageOpen } from 'lucide-react';
+import { PackageOpen, Trash2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
+import { useRole } from '../context/RoleContext';
+import { useToast } from '../context/ToastContext';
 import StatusBadge from '../components/StatusBadge';
+import TasdiqOyna from '../components/TasdiqOyna';
+import * as orderService from '../services/orders';
 import { formatVaqt, formatSum } from '../utils/formatlash';
+import { hajmQatorlari } from '../utils/hajm';
 
 const IJRO_LABELS = [
   { key: 'zayavka',    label: 'Zayavka' },
@@ -16,11 +21,17 @@ function ishtirokchilar(order) {
   return Object.values(order.ijrochilar || {}).filter(Boolean);
 }
 
-export default function History({ orders }) {
+export default function History({ orders, onRefresh }) {
   const { dark } = useTheme();
+  const { role } = useRole();
+  const { showToast } = useToast();
   const [filterDate, setFilterDate] = useState('');
   const [filterPerson, setFilterPerson] = useState('');
   const [selected, setSelected] = useState(null);
+  const [showOchirish, setShowOchirish] = useState(false);
+  const [band, setBand] = useState(false);
+
+  const ochiraOlad = role === 'Owner';   // o'chirish — faqat Owner
 
   const allFinished = orders
     .filter(o => o.status === 'tugadi')
@@ -43,9 +54,54 @@ export default function History({ orders }) {
   const textPrimary = dark ? 'text-white' : 'text-gray-900';
   const textSec = dark ? 'text-gray-400' : 'text-gray-500';
 
+  const handleOchirish = async () => {
+    setBand(true);
+    try {
+      await orderService.remove(selected.id);
+      setShowOchirish(false);
+      setSelected(null);
+      showToast('Buyurtma o\'chirildi', 'success');
+      onRefresh?.();
+    } catch (err) {
+      showToast(err.message || 'O\'chirib bo\'lmadi', 'error');
+    } finally {
+      setBand(false);
+    }
+  };
+
   // ── Detal (Mijozlar sahifasidek — sahifa ichida, modal emas) ──
   if (selected) {
-    return <OrderDetail order={selected} dark={dark} onBack={() => setSelected(null)} />;
+    return (
+      <>
+        <OrderDetail
+          order={selected}
+          dark={dark}
+          onBack={() => setSelected(null)}
+          actions={ochiraOlad ? (
+            <button
+              onClick={() => setShowOchirish(true)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-1.5 active:scale-95 transition-all ${
+                dark ? 'bg-gray-800 text-red-400' : 'bg-red-100 text-red-600'
+              }`}
+            >
+              <Trash2 size={15} /> O'chirish
+            </button>
+          ) : null}
+        />
+
+        {showOchirish && (
+          <TasdiqOyna
+            dark={dark}
+            title="Buyurtmani o'chirish"
+            matn={`#${selected.raqam} — ${selected.mijozIsmi || 'mijoz'} buyurtmasi bazadan butunlay o'chiriladi. Bu amalni qaytarib bo'lmaydi.`}
+            tasdiqMatn="Ha, o'chirilsin"
+            band={band}
+            onClose={() => setShowOchirish(false)}
+            onConfirm={handleOchirish}
+          />
+        )}
+      </>
+    );
   }
 
   return (
@@ -118,7 +174,7 @@ export default function History({ orders }) {
           >
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className={`font-bold ${textPrimary}`}>#{order.id}</span>
+                <span className={`font-bold ${textPrimary}`}>#{order.raqam}</span>
                 <StatusBadge status={order.status} />
               </div>
               <span className={`text-xs ${textSec}`}>{formatVaqt(order.tugatilganVaqt || order.yangilanganVaqt)}</span>
@@ -142,7 +198,7 @@ export default function History({ orders }) {
 }
 
 // ── Buyurtma detali — sahifa ichida (Mijozlardek) ──
-export function OrderDetail({ order, dark, onBack }) {
+export function OrderDetail({ order, dark, onBack, actions }) {
   const textPrimary = dark ? 'text-white' : 'text-gray-900';
   const textSec = dark ? 'text-gray-400' : 'text-gray-500';
 
@@ -157,15 +213,21 @@ export function OrderDetail({ order, dark, onBack }) {
 
       <div className={`rounded-2xl p-4 mb-4 ${dark ? 'bg-gray-900 border border-gray-800' : 'bg-white border border-gray-100'} shadow-sm`}>
         <div className="flex items-center gap-2 mb-1">
-          <h2 className={`text-lg font-bold ${textPrimary}`}>Buyurtma #{order.id}</h2>
+          <h2 className={`text-lg font-bold ${textPrimary}`}>Buyurtma #{order.raqam}</h2>
           <StatusBadge status={order.status} />
         </div>
-        <span className={`text-xs ${textSec}`}>Faqat ko'rish rejimi</span>
+        <span className={`text-xs ${textSec}`}>{actions ? formatVaqt(order.yangilanganVaqt) : 'Faqat ko\'rish rejimi'}</span>
+        {actions && <div className="flex gap-2 mt-3">{actions}</div>}
       </div>
 
       <Section title="MIJOZ MA'LUMOTLARI" dark={dark}>
         <InfoRow label="Mijoz" dark={dark}><span className={`text-sm ${textPrimary}`}>{order.mijozIsmi || '—'}</span></InfoRow>
         <InfoRow label="Telefon" dark={dark}><a href={`tel:${order.telefon}`} className="text-blue-500 text-sm">{order.telefon}</a></InfoRow>
+        {(order.qoshimchaTelefonlar || []).map((tel, i) => (
+          <InfoRow key={i} label={i === 0 ? "Qo'shimcha" : ''} dark={dark}>
+            <a href={`tel:${tel}`} className="text-blue-500 text-sm">{tel}</a>
+          </InfoRow>
+        ))}
         <InfoRow label="Manzil" dark={dark}><span className={`text-sm ${textPrimary}`}>{order.manzil || '—'}</span></InfoRow>
         {order.otkazSababi && <InfoRow label="Otkaz sababi" dark={dark}><span className={`text-sm ${textPrimary}`}>{order.otkazSababi}</span></InfoRow>}
         <InfoRow label="Yaratilgan" dark={dark}><span className={`text-xs ${textSec}`}>{formatVaqt(order.yaratilganVaqt)}</span></InfoRow>
@@ -211,6 +273,14 @@ export function OrderDetail({ order, dark, onBack }) {
       {order.umumiyHisob > 0 && (
         <div className="mt-4 mb-4">
           <Section title="TO'LOV" dark={dark}>
+            {/* Umumiy hajm — yuqorida har mahsulot alohida, bu yerda yig'indisi */}
+            {hajmQatorlari(order).map((q, i) => (
+              <InfoRow key={i} label={q.label} dark={dark}>
+                <span className={`text-sm font-bold ${dark ? 'text-blue-400' : 'text-blue-600'}`}>
+                  {q.qiymat}{q.izoh && <span className="font-normal opacity-70"> ({q.izoh})</span>}
+                </span>
+              </InfoRow>
+            ))}
             <InfoRow label="Jami hisob" dark={dark}><span className={`text-sm font-bold ${textPrimary}`}>{formatSum(order.umumiyHisob)} so'm</span></InfoRow>
             {order.chegirma > 0 && <InfoRow label="Chegirma" dark={dark}><span className="text-sm text-red-500">-{formatSum(order.chegirma)} so'm</span></InfoRow>}
             <InfoRow label="Yakuniy" dark={dark}><span className="text-sm font-extrabold text-green-600">{formatSum(order.yakuniySumma)} so'm</span></InfoRow>

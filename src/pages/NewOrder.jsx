@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Plus, X } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useRole } from '../context/RoleContext';
 import * as orderService from '../services/orders';
@@ -15,6 +16,8 @@ export default function NewOrder({ onCreated }) {
     mijozIsmi: '',
     izoh:     '',
   });
+  // Qo'shimcha telefon raqamlari — "+" tugmasi bilan qo'shiladi
+  const [qoshimcha, setQoshimcha] = useState([]);
   const [saving, setSaving] = useState(false);
   const [xato,   setXato]   = useState('');
 
@@ -30,7 +33,11 @@ export default function NewOrder({ onCreated }) {
     setSaving(true);
     setXato('');
     try {
-      await orderService.create({ ...form, muallif: role });
+      await orderService.create({
+        ...form,
+        qoshimchaTelefonlar: qoshimcha.map(t => t.trim()).filter(Boolean),
+        muallif: role,
+      });
       if (onCreated) onCreated();
       navigate('/');
     } catch (err) {
@@ -46,13 +53,49 @@ export default function NewOrder({ onCreated }) {
         <div className="p-4 space-y-4">
           <div>
             <label className={labelCls}>📞 Telefon</label>
-            <input
-              type="tel"
-              placeholder="+998 XX XXX XX XX"
-              value={form.telefon}
-              onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))}
-              className={inputCls}
-            />
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                placeholder="+998 XX XXX XX XX"
+                value={form.telefon}
+                onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))}
+                className={`${inputCls} flex-1`}
+              />
+              {/* Qo'shimcha nomer uchun joy ochadi */}
+              <button
+                type="button"
+                onClick={() => setQoshimcha(list => [...list, ''])}
+                title="Qo'shimcha nomer qo'shish"
+                className={`w-12 rounded-2xl flex items-center justify-center flex-shrink-0 active:scale-95 transition-all ${
+                  dark ? 'bg-gray-800 text-blue-400 border border-gray-700' : 'bg-blue-50 text-blue-600 border border-blue-100'
+                }`}
+              >
+                <Plus size={18} />
+              </button>
+            </div>
+
+            {/* Qo'shimcha nomerlar */}
+            {qoshimcha.map((tel, i) => (
+              <div key={i} className="flex gap-2 mt-2">
+                <input
+                  type="tel"
+                  placeholder={`Qo'shimcha nomer ${i + 1}`}
+                  value={tel}
+                  onChange={e => setQoshimcha(list => list.map((t, j) => (j === i ? e.target.value : t)))}
+                  className={`${inputCls} flex-1`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setQoshimcha(list => list.filter((_, j) => j !== i))}
+                  title="O'chirish"
+                  className={`w-12 rounded-2xl flex items-center justify-center flex-shrink-0 active:scale-95 transition-all ${
+                    dark ? 'bg-gray-800 text-red-400 border border-gray-700' : 'bg-red-50 text-red-500 border border-red-100'
+                  }`}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            ))}
           </div>
           <div>
             <label className={labelCls}>📍 Manzil</label>

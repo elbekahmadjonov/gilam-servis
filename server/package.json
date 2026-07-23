@@ -8,7 +8,8 @@
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "migrate": "node src/migrate.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "tel": "node src/normalize_tel.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

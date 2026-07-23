@@ -41,7 +41,7 @@ export default function Debt({ orders, onRefresh }) {
           <div key={order.id} className={`rounded-2xl p-4 mb-3 border ${dark ? 'bg-gray-900 border-gray-800' : 'bg-white border-gray-100'} shadow-sm`}>
             <div className="flex items-start justify-between mb-2">
               <div>
-                <span className={`font-bold text-sm ${dark ? 'text-white' : 'text-gray-900'}`}>#{order.id} — {order.mijozIsmi}</span>
+                <span className={`font-bold text-sm ${dark ? 'text-white' : 'text-gray-900'}`}>#{order.raqam} — {order.mijozIsmi}</span>
                 <p className={`text-xs mt-0.5 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>{order.telefon}</p>
               </div>
               <span className="text-red-500 font-extrabold text-base">{formatSum(order.qarz)} so'm</span>

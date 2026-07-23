@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback } f
 import { api, setToken, getToken } from '../lib/api';
 import { disconnectSocket } from '../lib/socket';
 import { isTelegram, getInitData, initTelegram } from '../lib/telegram';
+import { getTenantSlug, setResolvedSlug } from '../lib/tenant';
 import { removePushToken } from '../lib/push';
 
 const SESSION_TIMEOUT = 15000; // 15 soniya — undan keyin xato
@@ -43,6 +44,24 @@ export function RoleProvider({ children }) {
     setLoading(true);
     setAuthError(null);
 
+    // 0) Telegram ichida bo'lsak — qaysi korxona ekanini BOTDAN aniqlaymiz.
+    //    Manzildagi ?t= yo'qolsa yoki xotirada boshqa korxona qolib ketsa ham
+    //    shu usul to'g'ri javob beradi (initData'ni bot tokeni imzolagan).
+    if (isTelegram()) {
+      try {
+        const { slug } = await api.post('/auth/resolve-tenant', { initData: getInitData() });
+        if (slug) {
+          if (slug !== getTenantSlug()) {
+            console.warn(`[Tenant] bot '${slug}' korxonasiniki — slug tuzatildi`);
+          }
+          setResolvedSlug(slug);
+        }
+      } catch (err) {
+        // Aniqlab bo'lmadi — pastdagi odatiy tartib (?t= / xotira) ishlaydi
+        console.warn('[Tenant] botdan aniqlab bo\'lmadi:', err.message);
+      }
+    }
+
     // Impersonation: SuperAdmin panelidan #imp=<token> bilan kelinganda
     try {
       const m = window.location.hash.match(/imp=([^&]+)/);
@@ -64,9 +83,22 @@ export function RoleProvider({ children }) {
       try {
         const data = await api.get('/auth/me');
         clearTimeout(timerRef.current);
-        setXodim({ ...data, rol: capitalizeRole(data.rol) });
-        setLoading(false);
-        return; // ✓ eslab qolindi — qaytadan login shart emas
+
+        // Sessiya BOSHQA korxonaga tegishli bo'lsa (boshqa bot ochilgan) —
+        // uni tozalaymiz. Aks holda localStorage bitta domenda umumiy bo'lgani
+        // uchun yangi bot eski korxona ma'lumotlarini ko'rsatib qo'yadi.
+        const joriySlug = getTenantSlug();
+        if (data.tenant_slug && data.tenant_slug !== joriySlug) {
+          console.warn(`[Auth] sessiya '${data.tenant_slug}' korxonasiniki, ` +
+                       `hozir '${joriySlug}' ochildi — sessiya tozalandi`);
+          setToken(null);
+          setXodim(null);
+          // pastdagi qaytadan kirish oqimiga tushamiz
+        } else {
+          setXodim({ ...data, rol: capitalizeRole(data.rol) });
+          setLoading(false);
+          return; // ✓ eslab qolindi — qaytadan login shart emas
+        }
       } catch (err) {
         clearTimeout(timerRef.current);
         if (err.message === 'tenant_suspended') { setBlocked(true); setLoading(false); return; }

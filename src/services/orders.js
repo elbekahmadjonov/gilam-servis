@@ -12,8 +12,10 @@ export function invalidateCache() { ordersCache = null; lastFetch = 0; }
 function dbToApp(row, izohlar = [], harakatlar = []) {
   return {
     id:               row.id,
+    raqam:            row.raqam ?? row.id,   // korxonaga xos ko'rsatiladigan raqam
     mijozIsmi:        row.mijoz_ismi   || '',
     telefon:          row.telefon      || '',
+    qoshimchaTelefonlar: row.qoshimcha_telefonlar || [],
     manzil:           row.manzil       || '',
     izoh:             row.izoh         || '',
     status:           row.status       || 'yangi',
@@ -32,7 +34,9 @@ function dbToApp(row, izohlar = [], harakatlar = []) {
                         || (row.yuvuvchi?.rol ? capitalize(row.yuvuvchi.rol) : null),
     yuvuvchiId:       row.yuvuvchi_id  || null,
     ijrochilar:       row.ijrochilar   || {},
+    tahrirlar:        row.tahrirlar    || [],
     tugatilganVaqt:   row.tugatilgan_vaqt || null,
+    yuvilganVaqt:     row.yuvilgan_vaqt   || null,
     yaratilganVaqt:   row.yaratilgan_vaqt,
     yangilanganVaqt:  row.yangilangan_vaqt,
     izohlar:    izohlar.map(iz => {
@@ -90,6 +94,7 @@ export async function create(data) {
   const newRow = await api.post('/orders', {
     mijozIsmi: data.mijozIsmi || '',
     telefon:   data.telefon   || '',
+    qoshimchaTelefonlar: data.qoshimchaTelefonlar || [],
     manzil:    data.manzil    || '',
     izoh:      data.izoh      || '',
   });
@@ -125,10 +130,13 @@ export async function remove(id) {
 export function search(query, orders = []) {
   if (!query?.trim()) return orders;
   const q = query.toLowerCase();
+  const qRaqam = q.replace(/\s/g, '');
+  const telMos = (tel) => (tel || '').replace(/\s/g, '').includes(qRaqam);
   return orders.filter(o =>
-    String(o.id).includes(q) ||
+    String(o.raqam ?? o.id).includes(q) ||
     (o.mijozIsmi || '').toLowerCase().includes(q) ||
-    (o.telefon   || '').replace(/\s/g, '').includes(q.replace(/\s/g, ''))
+    telMos(o.telefon) ||
+    (o.qoshimchaTelefonlar || []).some(telMos)
   );
 }
 
@@ -147,6 +155,10 @@ function sanaDavrda(dateVal, period, now, specificDate) {
     return d.getFullYear() === t.getFullYear() &&
            d.getMonth()    === t.getMonth()    &&
            d.getDate()     === t.getDate();
+  } else if (period === 'tanlanganOy' && specificDate) {
+    // specificDate — 'YYYY-MM' ko'rinishida (oy tanlagichdan)
+    const [y, m] = String(specificDate).split('-').map(Number);
+    return d.getFullYear() === y && d.getMonth() === m - 1;
   }
   return true;
 }
@@ -191,6 +203,32 @@ export function computeStats(orders = [], period = 'kun', specificDate = null) {
     statusCounts[s] = orders.filter(o => o.status === s).length;
   });
 
+  // Shu davrda YUVILGAN (pardozda statusiga o'tgan) buyurtmalar — yuvilgan sana bo'yicha
+  const yuvilganDavr = orders.filter(
+    o => o.yuvilganVaqt && sanaDavrda(o.yuvilganVaqt, period, now, specificDate)
+  );
+
+  const yigHajm = (list) => {
+    const h = { gilamM2: 0, korpachaMetr: 0, pardaKg: 0, gilamSoni: 0, odealSoni: 0, korpaSoni: 0 };
+    list.forEach(o => {
+      const x = orderHajmi(o);
+      h.gilamM2      += x.gilamM2;
+      h.korpachaMetr += x.korpachaMetr;
+      h.pardaKg      += x.pardaKg;
+      h.gilamSoni    += x.gilamSoni;
+      h.odealSoni    += x.odealSoni;
+      h.korpaSoni    += x.korpaSoni;
+    });
+    h.gilamM2      = Math.round(h.gilamM2 * 100) / 100;
+    h.korpachaMetr = Math.round(h.korpachaMetr * 100) / 100;
+    h.pardaKg      = Math.round(h.pardaKg * 100) / 100;
+    return h;
+  };
+
+  // Yuvilgan mahsulot hajmi (shu davrda pardozdaga o'tganlar)
+  const yuvilganHajm = yigHajm(yuvilganDavr);
+  yuvilganHajm.soni = yuvilganDavr.length;
+
   // Mahsulot hajmlari (shu davrda tugagan buyurtmalar bo'yicha)
   const hajm = { gilamM2: 0, korpachaMetr: 0, pardaKg: 0, gilamSoni: 0, odealSoni: 0, korpaSoni: 0 };
   tugadiDavr.forEach(o => {
@@ -206,12 +244,34 @@ export function computeStats(orders = [], period = 'kun', specificDate = null) {
   hajm.korpachaMetr = Math.round(hajm.korpachaMetr * 100) / 100;
   hajm.pardaKg      = Math.round(hajm.pardaKg * 100) / 100;
 
+  hajm.soni = tugadiDavr.length;
+
+  // Kutilayotgan daromad — AYNI PAYTDAGI holat (davrga bog'liq emas).
+  // Hali tugamagan, lekin narxlangan buyurtmalar: pardozda va dostavka.
+  const kutilgan = (status) => {
+    const list = orders.filter(o => o.status === status);
+    return {
+      soni:  list.length,
+      summa: list.reduce((s, o) => s + (o.yakuniySumma || o.umumiyHisob || 0), 0),
+    };
+  };
+  const pardozda = kutilgan('qadoqlash');
+  const dostavka = kutilgan('dostavka');
+  const kutilayotgan = {
+    pardozda,
+    dostavka,
+    jamiSumma: pardozda.summa + dostavka.summa,
+    jamiSoni:  pardozda.soni  + dostavka.soni,
+  };
+
   return {
     statusCounts,
     daromad:      tugadiDavr.reduce((s, o) => s + (o.yakuniySumma || 0), 0),
     jamilarQarz:  orders.reduce((s, o) => s + (o.qarz || 0), 0),
     periodTushum: tugadiDavr.length,
-    hajm,
+    hajm,          // tugallangan buyurtmalar hajmi
+    yuvilganHajm,  // yuvilgan (pardozdaga o'tgan) buyurtmalar hajmi
+    kutilayotgan,  // ayni paytda pardozda + dostavkada turgan summa
   };
 }
 
@@ -227,16 +287,21 @@ export function sumXarajatlar(xarajatlar = [], period = 'kun', specificDate = nu
       const t = new Date(specificDate);
       return d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() && d.getDate() === t.getDate();
     }
+    if (period === 'tanlanganOy' && specificDate) {
+      const [y, m] = String(specificDate).split('-').map(Number);
+      return d.getFullYear() === y && d.getMonth() === m - 1;
+    }
     return true;
   };
-  const acc = { gaz: 0, obed: 0, ishchi: 0, boshqa: 0 };
+  const acc = { gaz: 0, svet: 0, obed: 0, ishchi: 0, boshqa: 0 };
   xarajatlar.filter(x => inDavr(x.sana)).forEach(x => {
     acc.gaz    += Number(x.gaz)    || 0;
+    acc.svet   += Number(x.svet)   || 0;
     acc.obed   += Number(x.obed)   || 0;
     acc.ishchi += Number(x.ishchi) || 0;
     acc.boshqa += Number(x.boshqa) || 0;
   });
-  acc.jami = acc.gaz + acc.obed + acc.ishchi + acc.boshqa;
+  acc.jami = acc.gaz + acc.svet + acc.obed + acc.ishchi + acc.boshqa;
   return acc;
 }
 

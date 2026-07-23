@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
 import { signToken, signSuperToken, requireAuth, requireSuperAdmin } from '../auth.js';
 import { getTenantById, xodimLimitOshdi } from '../tenant.js';
+import { telegramTogri } from '../muhit.js';
 
 const ROLLAR = ['Owner', 'Admin', 'Dostavchik', 'Ishchi'];
 
@@ -313,6 +314,10 @@ function maskBot(t) {
 
 // Bot menyu tugmasini Mini App'ga sozlaydi + username oladi
 async function configureBot(botToken, slug) {
+  // HIMOYA: lokal muhitda haqiqiy botning menyu tugmasini localhost'ga
+  // o'zgartirib qo'ymaslik uchun (bir marta shunday hodisa bo'lgan).
+  if (!telegramTogri('bot menyusini sozlash')) return null;
+
   const url = `${WEB_BASE}/?t=${encodeURIComponent(slug)}`;
   // getMe → username
   const me = await fetch(`https://api.telegram.org/bot${botToken}/getMe`).then((r) => r.json());

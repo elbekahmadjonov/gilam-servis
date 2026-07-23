@@ -65,6 +65,32 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/resolve-tenant ─────────────────────
+// Kirish: { initData }  →  { slug, nomi }
+// Qaysi korxona ekanini BOTNING O'ZIDAN aniqlaydi: Telegram initData'ni
+// bot tokeni bilan imzolaydi, shuning uchun faqat to'g'ri tenantning tokeni
+// imzoni tasdiqlaydi. Manzildagi ?t= yo'qolsa yoki brauzer xotirasida eski
+// korxona qolib ketsa ham — bu usul adashmaydi.
+router.post('/resolve-tenant', async (req, res) => {
+  try {
+    const { initData } = req.body || {};
+    if (!initData) return res.status(400).json({ error: 'initData talab qilinadi' });
+
+    const { rows } = await query(
+      "SELECT id, nomi, slug, bot_token FROM tenants WHERE COALESCE(bot_token,'') <> ''"
+    );
+    for (const t of rows) {
+      if (validateInitData(initData, t.bot_token)) {
+        return res.json({ slug: t.slug, nomi: t.nomi });
+      }
+    }
+    return res.status(404).json({ error: 'tenant_not_found' });
+  } catch (err) {
+    console.error('[auth/resolve-tenant]', err.message);
+    return res.status(500).json({ error: 'Server xatosi' });
+  }
+});
+
 // ── POST /api/auth/telegram ───────────────────────────
 // Kirish: { initData, slug }  →  { token, xodim }
 router.post('/telegram', async (req, res) => {
@@ -100,8 +126,12 @@ router.post('/telegram', async (req, res) => {
 // ── GET /api/auth/me ──────── (token'dagi tenant bo'yicha scoped) ──
 router.get('/me', requireAuth, async (req, res) => {
   try {
+    // Tenant slug ham qaytariladi — mijoz sessiya qaysi korxonaga tegishli
+    // ekanini bilib, boshqa korxona botiga kirilganda uni tozalaydi.
     const { rows } = await query(
-      'SELECT id, ism, login, rol, telefon FROM xodimlar WHERE id = $1 AND tenant_id = $2',
+      `SELECT x.id, x.ism, x.login, x.rol, x.telefon, t.slug AS tenant_slug
+       FROM xodimlar x JOIN tenants t ON t.id = x.tenant_id
+       WHERE x.id = $1 AND x.tenant_id = $2`,
       [req.user.id, req.user.tenant_id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Xodim topilmadi' });

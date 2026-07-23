@@ -20,14 +20,33 @@ function fromTelegram() {
   }
 }
 
+// Botning imzosidan aniqlangan slug — eng ishonchli manba.
+// Telegram initData'ni bot tokeni imzolaydi, shuning uchun server qaysi bot
+// ochilganini aniq biladi. Bu manzildagi ?t= va xotiradagi eski qiymatdan ustun.
+let botdanSlug = null;
+
+export function setResolvedSlug(slug) {
+  if (!slug) return;
+  botdanSlug = slug;
+  try { localStorage.setItem(KEY, slug); } catch { /* skip */ }
+}
+
+// APK ichiga tikilgan korxona (build paytida VITE_TENANT_SLUG bilan beriladi).
+// Har korxonaga alohida APK yig'ilganda ishlatiladi — u yerda ?t= ham,
+// Telegram start_param ham bo'lmaydi.
+const TIKILGAN = (import.meta.env?.VITE_TENANT_SLUG || '').trim();
+
 // Aniqlangan slug'ni qaytaradi (va yangi topilsa localStorage'ga yozadi).
-// Hech narsa topilmasa 'default' — mavjud gilam.qariya.uz (slug'siz) shu tenant.
+// Tartib: bot imzosi → manzil ?t= → Telegram start_param → tikilgan → xotira → 'default'.
 export function getTenantSlug() {
+  if (botdanSlug) return botdanSlug;
   const found = (fromUrl() || fromTelegram() || '').trim();
   if (found) {
     localStorage.setItem(KEY, found);
     return found;
   }
+  // Tikilgan slug xotiradan ustun — APK aynan o'z korxonasiga bog'lanadi
+  if (TIKILGAN) return TIKILGAN;
   return localStorage.getItem(KEY) || 'default';
 }
 

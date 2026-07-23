@@ -34,7 +34,7 @@ export default function OrderCard({ order, onDetail }) {
       {/* Top row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className={`font-bold text-base ${dark ? 'text-white' : 'text-gray-900'}`}>#{order.id}</span>
+          <span className={`font-bold text-base ${dark ? 'text-white' : 'text-gray-900'}`}>#{order.raqam}</span>
           <StatusBadge status={order.status} />
         </div>
         <span className={`text-xs flex items-center gap-1 ${dark ? 'text-gray-500' : 'text-gray-400'}`}>

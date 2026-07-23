@@ -6,6 +6,10 @@ import { useRole } from '../context/RoleContext';
 import { useToast } from '../context/ToastContext';
 import { formatVaqt, formatSum } from '../utils/formatlash';
 import { canActOnStatus } from '../utils/rollar';
+import { tahrirDiff } from '../utils/tahrir';
+import { syncNarxlar, tovarlarOzgardi, tovarlarNarxdan } from '../utils/narxSync';
+import { normalizeBuyurtmaTel } from '../utils/telefon';
+import { hajmQatorlari } from '../utils/hajm';
 import * as orderService from '../services/orders';
 import TovarKiritish from './TovarKiritish';
 import NarxlashOyna from './NarxlashOyna';
@@ -24,6 +28,8 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   const [izohMatn,      setIzohMatn]      = useState('');
   const [showTovarOyna, setShowTovarOyna] = useState(false);
   const [showNarxOyna,  setShowNarxOyna]  = useState(false);
+  // Narx/o'lcham tahrirlash rejimi (pardozda va dostavka statusida) — status o'zgarmaydi
+  const [narxTahrir,    setNarxTahrir]    = useState(false);
   const [showTolovOyna, setShowTolovOyna] = useState(false);
   const [showTarix,     setShowTarix]     = useState(false);
   const [showBekor,     setShowBekor]     = useState(false);
@@ -124,11 +130,33 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
   };
 
   const handleTahrir = async (data) => {
-    await doUpdate(
-      { mijozIsmi: data.mijozIsmi, telefon: data.telefon,
-        manzil: data.manzil, izoh: data.izoh, tovarlar: data.tovarlar },
-      `Tahrirlandi — ${role}`
-    );
+    // Raqamlarni avval bir xil ko'rinishga keltiramiz (+998912345678),
+    // shunda tarixga aynan bazaga tushadigan qiymat yoziladi.
+    const tel = normalizeBuyurtmaTel(data.telefon, data.qoshimchaTelefonlar);
+    const toza = { ...data, telefon: tel.telefon, qoshimchaTelefonlar: tel.qoshimchaTelefonlar };
+
+    // Ism / telefon / manzil o'zgarsa — tarixga yozamiz (izohlar tagida ko'rinadi)
+    const yangiTahrirlar = tahrirDiff(order, toza, ijrochiNomi);
+
+    const changes = {
+      mijozIsmi: toza.mijozIsmi, telefon: toza.telefon,
+      qoshimchaTelefonlar: toza.qoshimchaTelefonlar,
+      manzil: toza.manzil, izoh: toza.izoh, tovarlar: toza.tovarlar,
+    };
+    if (yangiTahrirlar.length) {
+      changes.tahrirlar = [...(order.tahrirlar || []), ...yangiTahrirlar];
+    }
+
+    // Tovarlar soni o'zgarsa — narxlar (o'lcham/narx) ham moslashtiriladi.
+    // Kamaysa oxirgi element o'chadi: 3 ta gilamdan 2 tasi qolsa — 3-chisi ketadi.
+    if (tovarlarOzgardi(order.tovarlar, data.tovarlar)) {
+      const { narxlar, umumiyHisob } = syncNarxlar(order.narxlar, data.tovarlar);
+      changes.narxlar      = narxlar;
+      changes.umumiyHisob  = umumiyHisob;
+      changes.yakuniySumma = Math.max(0, umumiyHisob - (order.chegirma || 0));
+    }
+
+    await doUpdate(changes, `Tahrirlandi — ${role}`);
     setShowTahrir(false);
     showToast('Saqlandi!', 'success');
   };
@@ -149,7 +177,7 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
           </div>
 
           <div className={`flex items-center justify-between px-5 py-3 border-b ${border}`}>
-            <h2 className={`text-lg font-bold ${textPrimary}`}>Buyurtma #{order.id}</h2>
+            <h2 className={`text-lg font-bold ${textPrimary}`}>Buyurtma #{order.raqam}</h2>
             <div className="flex items-center gap-2">
               {saving && (
                 <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -176,6 +204,11 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
               <InfoRow label="Telefon" dark={dark}>
                 <a href={`tel:${order.telefon}`} className="text-blue-500 text-sm font-medium">{order.telefon}</a>
               </InfoRow>
+              {(order.qoshimchaTelefonlar || []).map((tel, i) => (
+                <InfoRow key={i} label={i === 0 ? "Qo'shimcha" : ''} dark={dark}>
+                  <a href={`tel:${tel}`} className="text-blue-500 text-sm font-medium">{tel}</a>
+                </InfoRow>
+              ))}
               <InfoRow label="Manzil" dark={dark}>
                 <span className={`text-sm ${textPrimary}`}>{order.manzil || '—'}</span>
               </InfoRow>
@@ -231,7 +264,8 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
                 onBekorBosqich={handleBekorBosqich}
                 onStatusChange={doUpdate}
                 onOpenTovar={() => setShowTovarOyna(true)}
-                onOpenNarx={() => setShowNarxOyna(true)}
+                onOpenNarx={() => { setNarxTahrir(false); setShowNarxOyna(true); }}
+                onOpenNarxTahrir={() => { setNarxTahrir(true); setShowNarxOyna(true); }}
                 onOpenTolov={() => setShowTolovOyna(true)}
                 showToast={showToast}
               />
@@ -286,6 +320,30 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
                 </div>
               </div>
             </div>
+
+            {/* Tahrirlangan ma'lumotlar tarixi (izohlar tagida) */}
+            {order.tahrirlar?.length > 0 && (
+              <div className="mx-4 mt-4">
+                <h3 className={`text-xs font-bold uppercase tracking-wider mb-2 ${textSec}`}>
+                  ✏️ TAHRIRLANGAN MA'LUMOTLAR
+                </h3>
+                <div className={`rounded-2xl border overflow-hidden ${dark ? 'border-gray-800 bg-gray-900' : 'border-gray-100 bg-gray-50'}`}>
+                  {[...order.tahrirlar].reverse().map((t, i) => (
+                    <div key={i} className={`px-4 py-2.5 border-b last:border-0 ${border}`}>
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className={`text-xs font-bold ${dark ? 'text-amber-400' : 'text-amber-600'}`}>{t.maydon}</span>
+                        <span className={`text-xs ${textSec}`}>{t.muallif} · {formatVaqt(t.vaqt)}</span>
+                      </div>
+                      <div className="text-sm">
+                        <span className={`line-through ${textSec}`}>{t.eski}</span>
+                        <span className={`mx-1.5 ${textSec}`}>→</span>
+                        <span className={`font-semibold ${textPrimary}`}>{t.yangi}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Tugmalar */}
             <div className="mx-4 mt-4 flex gap-2">
@@ -391,17 +449,32 @@ export default function OrderModal({ order: initialOrder, onClose, onRefresh }) 
       {showNarxOyna && (
         <NarxlashOyna
           order={order} dark={dark}
-          onClose={() => setShowNarxOyna(false)}
+          tahrirRejim={narxTahrir}
+          onClose={() => { setShowNarxOyna(false); setNarxTahrir(false); }}
           onSave={async (narxlar, umumiyHisob) => {
-            await doUpdate({
-              narxlar,
-              umumiyHisob,
-              yakuniySumma: umumiyHisob,
-              status: 'qadoqlash',
-              bosqich: { ...order.bosqich, yakunladi: true },
-              ijrochilar: { ...order.ijrochilar, yuvilmoqda: ijrochiNomi },
-            }, 'Yuvish yakunlandi → Qadoqlash');
+            if (narxTahrir) {
+              // Pardozda/Dostavka: faqat narx va o'lchamlar yangilanadi, status o'zgarmaydi.
+              // Oynada element o'chirilgan bo'lsa — tovarlar soni ham moslashadi.
+              await doUpdate({
+                narxlar,
+                tovarlar: tovarlarNarxdan(order.tovarlar, narxlar),
+                umumiyHisob,
+                yakuniySumma: Math.max(0, umumiyHisob - (order.chegirma || 0)),
+              }, 'Narx va o\'lchamlar tahrirlandi');
+              showToast('Narxlar yangilandi', 'success');
+            } else {
+              // Yuvilmoqda: narxlash yakunlanadi → Pardozda
+              await doUpdate({
+                narxlar,
+                umumiyHisob,
+                yakuniySumma: umumiyHisob,
+                status: 'qadoqlash',
+                bosqich: { ...order.bosqich, yakunladi: true },
+                ijrochilar: { ...order.ijrochilar, yuvilmoqda: ijrochiNomi },
+              }, 'Yuvish yakunlandi → Qadoqlash');
+            }
             setShowNarxOyna(false);
+            setNarxTahrir(false);
           }}
         />
       )}
@@ -561,6 +634,16 @@ function TafsilotlarSection({ order, dark }) {
         )}
         {narxlangan && (
           <div className={`rounded-xl border overflow-hidden mt-1 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+            {/* Umumiy hajm — har mahsulot alohida yozilgan, bu yerda yig'indisi */}
+            {hajmQatorlari(order).map((q, i) => (
+              <div key={i} className={`flex justify-between items-center px-3 py-2 border-b ${divider}`}>
+                <span className={`text-xs font-semibold ${textMuted}`}>
+                  {q.label}
+                  {q.izoh && <span className="ml-1 font-normal opacity-70">({q.izoh})</span>}
+                </span>
+                <span className={`text-sm font-bold ${dark ? 'text-blue-400' : 'text-blue-600'}`}>{q.qiymat}</span>
+              </div>
+            ))}
             <div className={`flex justify-between items-center px-3 py-2 border-b ${divider}`}>
               <span className={`text-xs font-semibold ${textMuted}`}>Jami hisob</span>
               <span className={`text-sm font-bold ${textPrimary}`}>{formatSum(order.umumiyHisob)} so'm</span>
@@ -613,7 +696,7 @@ function TarixModal({ order, dark, onClose }) {
   );
 }
 
-function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich, onBekorBosqich, onStatusChange, onOpenTovar, onOpenNarx, onOpenTolov, showToast }) {
+function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich, onBekorBosqich, onStatusChange, onOpenTovar, onOpenNarx, onOpenNarxTahrir, onOpenTolov, showToast }) {
   const noAccess = () => showToast('Bu amal sizning rolingizda mavjud emas', 'error');
   const ijrochiNomi = xodim?.ism || xodim?.login || role || 'Noma\'lum';
 
@@ -718,6 +801,10 @@ function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich,
   if (order.status === 'qadoqlash') {
     return (
       <div className="space-y-2">
+        {/* Narx va o'lchamlarni tahrirlash (pardozda) */}
+        <ActionBtn onClick={onOpenNarxTahrir} className={dark ? 'bg-gray-800 text-amber-400' : 'bg-amber-100 text-amber-700'}>
+          ✏️ Narx / o'lchamni tahrirlash
+        </ActionBtn>
         {order.bosqich.qadoqlayapman ? (
           <BannerTasdiq label="Qadoqlayapman" onBekor={() => onBekorBosqich('qadoqlayapman')} />
         ) : (
@@ -746,6 +833,10 @@ function StatusBosqichlar({ order, dark, role, xodim, canAct, saving, onBosqich,
   if (order.status === 'dostavka') {
     return (
       <div className="space-y-2">
+        {/* Narx va o'lchamlarni tahrirlash (dostavka) */}
+        <ActionBtn onClick={onOpenNarxTahrir} className={dark ? 'bg-gray-800 text-amber-400' : 'bg-amber-100 text-amber-700'}>
+          ✏️ Narx / o'lchamni tahrirlash
+        </ActionBtn>
         {order.bosqich.olibKetdim ? (
           <BannerTasdiq label="Olib ketdim" onBekor={() => onBekorBosqich('olibKetdim')} />
         ) : (

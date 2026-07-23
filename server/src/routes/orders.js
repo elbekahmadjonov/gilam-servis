@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { query } from '../db.js';
+import { query, pool } from '../db.js';
 import { requireAuth, requireTenant, requireRole } from '../auth.js';
 import { requireTenantActive, buyurtmaLimitOshdi } from '../tenant.js';
 import { emitOrdersChanged } from '../realtime.js';
 import { notifyOrderStatus } from '../notify.js';
+import { normalizeBuyurtmaTel } from '../telefon.js';
 
 const router = Router();
 // Barcha buyurtma endpointlari: auth + tenant konteksti + tenant faolligi
@@ -13,6 +14,7 @@ router.use(requireAuth, requireTenant, requireTenantActive);
 const COL_MAP = {
   mijozIsmi:    'mijoz_ismi',
   telefon:      'telefon',
+  qoshimchaTelefonlar: 'qoshimcha_telefonlar',
   manzil:       'manzil',
   izoh:         'izoh',
   status:       'status',
@@ -29,8 +31,11 @@ const COL_MAP = {
   lng:          'lng',
   yuvuvchiId:   'yuvuvchi_id',
   ijrochilar:   'ijrochilar',
+  tahrirlar:    'tahrirlar',
 };
-const JSONB_COLS = new Set(['bosqich', 'tovarlar', 'narxlar', 'tolov', 'ijrochilar']);
+const JSONB_COLS = new Set([
+  'bosqich', 'tovarlar', 'narxlar', 'tolov', 'ijrochilar', 'tahrirlar', 'qoshimcha_telefonlar',
+]);
 
 // jsonb ustunlar uchun obyektni string qilamiz (node-pg talabi)
 function encode(col, val) {
@@ -117,20 +122,45 @@ router.post('/', async (req, res) => {
     };
     const tolov = { turi: null, naqd: 0, karta: 0 };
 
-    const { rows } = await query(
-      `INSERT INTO buyurtmalar
-        (tenant_id, mijoz_ismi, telefon, manzil, izoh, status, bosqich, tovarlar, narxlar,
-         umumiy_hisob, chegirma, yakuniy_summa, tolov, qarz, otkaz_sababi, yaratgan_id)
-       VALUES ($1,$2,$3,$4,$5,'yangi',$6,$7,$8,0,0,0,$9,0,'',$10)
-       RETURNING *`,
-      [
-        req.user.tenant_id,
-        d.mijozIsmi || '', d.telefon || '', d.manzil || '', d.izoh || '',
-        JSON.stringify(bosqich), JSON.stringify(tovarlar), JSON.stringify(narxlar),
-        JSON.stringify(tolov), req.user.id,
-      ]
-    );
-    const newRow = rows[0];
+    // Telefonlar bir xil ko'rinishga keltiriladi: +998912345678
+    // (bitta maydonda bir nechta nomer bo'lsa — qolganlari qo'shimchaga o'tadi)
+    const { telefon, qoshimchaTelefonlar: qoshimchaTel } =
+      normalizeBuyurtmaTel(d.telefon, d.qoshimchaTelefonlar);
+
+    // Korxonaga xos raqam beriladi (har korxona o'z hisobini yuritadi).
+    // Bir vaqtda ikkita buyurtma kelsa bir xil raqam olmasligi uchun —
+    // tranzaksiya ichida shu tenantga maslahat qulfi (advisory lock) qo'yamiz.
+    const client = await pool.connect();
+    let newRow;
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        `buyurtma_raqam:${req.user.tenant_id}`,
+      ]);
+      const { rows } = await client.query(
+        `INSERT INTO buyurtmalar
+          (tenant_id, mijoz_ismi, telefon, qoshimcha_telefonlar, manzil, izoh, status, bosqich,
+           tovarlar, narxlar, umumiy_hisob, chegirma, yakuniy_summa, tolov, qarz, otkaz_sababi,
+           yaratgan_id, raqam)
+         VALUES ($1,$2,$3,$4,$5,$6,'yangi',$7,$8,$9,0,0,0,$10,0,'',$11,
+                 COALESCE((SELECT MAX(raqam) FROM buyurtmalar WHERE tenant_id = $1), 0) + 1)
+         RETURNING *`,
+        [
+          req.user.tenant_id,
+          d.mijozIsmi || '', telefon, JSON.stringify(qoshimchaTel),
+          d.manzil || '', d.izoh || '',
+          JSON.stringify(bosqich), JSON.stringify(tovarlar), JSON.stringify(narxlar),
+          JSON.stringify(tolov), req.user.id,
+        ]
+      );
+      await client.query('COMMIT');
+      newRow = rows[0];
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally {
+      client.release();
+    }
 
     // Boshlang'ich harakat (xato bo'lsa e'tiborsiz)
     await query(
@@ -151,7 +181,18 @@ router.post('/', async (req, res) => {
 // ── PATCH /api/orders/:id ─────────────────────────────
 router.patch('/:id', async (req, res) => {
   try {
-    const changes = req.body || {};
+    const changes = { ...(req.body || {}) };
+
+    // Telefon tahrirlansa — bir xil ko'rinishga keltiramiz (+998912345678)
+    if ('telefon' in changes || 'qoshimchaTelefonlar' in changes) {
+      const norm = normalizeBuyurtmaTel(changes.telefon, changes.qoshimchaTelefonlar);
+      if ('telefon' in changes) changes.telefon = norm.telefon;
+      // Asosiy maydonga bir nechta nomer yozilgan bo'lsa — qolganlari yo'qolmasin
+      if ('qoshimchaTelefonlar' in changes || norm.qoshimchaTelefonlar.length) {
+        changes.qoshimchaTelefonlar = norm.qoshimchaTelefonlar;
+      }
+    }
+
     const sets = [];
     const params = [];
     let i = 1;
@@ -173,6 +214,10 @@ router.patch('/:id', async (req, res) => {
     // (COALESCE — allaqachon yozilgan bo'lsa o'zgarmaydi)
     if (changes.status === 'tugadi') {
       sets.push('tugatilgan_vaqt = COALESCE(tugatilgan_vaqt, now())');
+    }
+    // "qadoqlash" (pardozda)ga o'tsa — yuvilgan vaqtni birinchi marta yozamiz
+    if (changes.status === 'qadoqlash') {
+      sets.push('yuvilgan_vaqt = COALESCE(yuvilgan_vaqt, now())');
     }
 
     if (sets.length === 0) {
@@ -238,8 +283,8 @@ router.post('/:id/harakat', async (req, res) => {
   }
 });
 
-// ── DELETE /api/orders/:id ──────── (faqat Admin) ──────
-router.delete('/:id', requireRole('Admin'), async (req, res) => {
+// ── DELETE /api/orders/:id ─── (faqat Owner; izoh va harakatlar cascade) ──
+router.delete('/:id', requireRole('Owner'), async (req, res) => {
   try {
     const { rowCount } = await query(
       'DELETE FROM buyurtmalar WHERE id = $1 AND tenant_id = $2',

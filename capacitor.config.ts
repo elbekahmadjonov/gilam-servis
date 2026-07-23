@@ -1,8 +1,11 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+// Har korxonaga alohida APK yig'ish uchun — build paytida beriladi:
+//   APK_ID=uz.pokiza.yuvish  APK_NOMI=Pokiza  npx cap sync android
+// Berilmasa — asosiy (Musaffo) ilovasi yig'iladi.
 const config: CapacitorConfig = {
-  appId:   'uz.gilam.yuvish',
-  appName: 'Musaffo',
+  appId:   process.env.APK_ID   || 'uz.gilam.yuvish',
+  appName: process.env.APK_NOMI || 'Musaffo',
   webDir:  'dist',
   server: {
     // HTTPS sxemasi — geolokatsiya API faqat HTTPS da ishlaydi

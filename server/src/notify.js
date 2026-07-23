@@ -2,24 +2,33 @@
 // Yetkazish: Telegram bot (xodim mini-app'ga kirganda telegram_id bog'lanadi) + socket (ilova ochiq).
 import { query } from './db.js';
 import { getIo } from './realtime.js';
+import { telegramTogri } from './muhit.js';
 
 // Qaysi status qaysi rollarga xabar beradi.
-//  - zayavka (yangi) va dostavka  → Owner + Dostavchik
+//  - zayavka (yangi) va dostavka  → Owner + Dostavchik + Admin
 //  - yuvilmoqda (jarayonda)       → Ishchi
 //  - pardozda (qadoqlash)         → xabar YO'Q
 const STATUS_ROLLAR = {
-  yangi:     ['Owner', 'Dostavchik'],
-  dostavka:  ['Owner', 'Dostavchik'],
+  yangi:     ['Owner', 'Dostavchik', 'Admin'],
+  dostavka:  ['Owner', 'Dostavchik', 'Admin'],
   jarayonda: ['Ishchi'],
 };
 
+// Server UTC'da ishlaydi — vaqtni mahalliy (Toshkent) zonada ko'rsatamiz
+const VAQT_ZONA = process.env.TZ_NOM || 'Asia/Tashkent';
+
 function vaqtMatn(d = new Date()) {
-  const soat = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const soat = new Intl.DateTimeFormat('en-GB', {
+    timeZone: VAQT_ZONA, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(d);
   return `${soat} · Bugun`;
 }
 
-// Telegram bot orqali bitta xabar
+// Telegram bot orqali bitta xabar.
+// Qaytaradi: { ok, bloklangan } — bloklangan bo'lsa xodim bog'lanishi tozalanadi.
 async function sendBot(botToken, chatId, text) {
+  // Lokal muhitda haqiqiy xodimlarga xabar ketib qolmasin
+  if (!telegramTogri('xabar yuborish')) return { ok: false, bloklangan: false };
   try {
     const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
@@ -27,11 +36,17 @@ async function sendBot(botToken, chatId, text) {
       body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
     });
     const j = await r.json();
-    if (!j.ok) console.warn('[bot] javob:', j.description);
-    return Boolean(j.ok);
+    if (j.ok) return { ok: true, bloklangan: false };
+
+    const izoh = String(j.description || '');
+    console.warn('[bot] javob:', izoh);
+    // Foydalanuvchi botni bloklagan / chat topilmadi / hisob o'chirilgan —
+    // bunday bog'lanish foydasiz, uni tozalaymiz (qayta login qilsa tiklanadi)
+    const bloklangan = /blocked by the user|chat not found|user is deactivated/i.test(izoh);
+    return { ok: false, bloklangan };
   } catch (e) {
     console.warn('[bot] yuborish xato:', e.message);
-    return false;
+    return { ok: false, bloklangan: false };
   }
 }
 
@@ -41,7 +56,7 @@ function shablon(status, order, boshqa) {
 
   if (status === 'yangi') {
     const qoshimcha = boshqa > 0 ? `\nva qabul qilinmagan ${boshqa} ta buyurtma` : '';
-    return `🆕 Yangi buyurtma #${order.id}\n` +
+    return `🆕 Yangi buyurtma #${order.raqam}\n` +
            `📍 ${order.manzil || '—'}\n` +
            `👤 ${order.mijoz_ismi || '—'}\n` +
            `📞 ${order.telefon || '—'}${qoshimcha}\n` +
@@ -52,7 +67,7 @@ function shablon(status, order, boshqa) {
   if (status === 'dostavka') {
     const qoshimcha = boshqa > 0 ? ` va ${boshqa} ta buyurtma` : '';
     return `🚚 Olib ketishga tayyor!\n` +
-           `🔢 #${order.id}${qoshimcha}\n` +
+           `🔢 #${order.raqam}${qoshimcha}\n` +
            `olib ketishga tayyor\n` +
            `⏰ Vaqt: ${vaqt}\n` +
            `Ilova orqali qabul qiling 👉`;
@@ -67,7 +82,7 @@ function shablon(status, order, boshqa) {
     if (t.korpachaSoni > 0) qatorlar.push(`- Ko'rpacha — ${t.korpachaSoni} dona`);
     if (t.pardaBor)         qatorlar.push(`- Parda — bor`);
     const tovarlar = qatorlar.length ? `\n📦 Tovarlar:\n${qatorlar.join('\n')}` : '';
-    return `🧺 Yuvishga tayyor #${order.id}${tovarlar}\n⏰ ${vaqt}`;
+    return `🧺 Yuvishga tayyor #${order.raqam}${tovarlar}\n⏰ ${vaqt}`;
   }
 
   return null;
@@ -81,7 +96,7 @@ export async function notifyOrderStatus(tenantId, orderId, status) {
   try {
     // Buyurtma ma'lumoti (shablon uchun)
     const { rows: orows } = await query(
-      'SELECT id, mijoz_ismi, telefon, manzil, tovarlar FROM buyurtmalar WHERE id = $1 AND tenant_id = $2',
+      'SELECT id, COALESCE(raqam, id) AS raqam, mijoz_ismi, telefon, manzil, tovarlar FROM buyurtmalar WHERE id = $1 AND tenant_id = $2',
       [orderId, tenantId]
     );
     const order = orows[0];
@@ -119,10 +134,24 @@ export async function notifyOrderStatus(tenantId, orderId, status) {
       [tenantId, rollar]
     );
     console.log(`[NOTIFY] status='${status}' rollar=[${rollar}] botga bog'langan xodim=${xodimlar.length}`);
+    if (xodimlar.length === 0) {
+      console.warn(`[NOTIFY] DIQQAT: [${rollar}] rolida botga bog'langan xodim yo'q — ` +
+                   `ular botdan mini appga bir marta kirishi kerak`);
+    }
 
     for (const x of xodimlar) {
-      const ok = await sendBot(botToken, x.telegram_id, text);
+      const { ok, bloklangan } = await sendBot(botToken, x.telegram_id, text);
       console.log(`[NOTIFY]   -> ${x.rol} ${x.ism || x.login}: ${ok ? 'YUBORILDI' : 'XATO'}`);
+
+      if (bloklangan) {
+        // Bog'lanishni tozalaymiz — aks holda har safar behuda urinib, xato yozib turadi
+        await query(
+          'UPDATE xodimlar SET telegram_id = NULL WHERE tenant_id = $1 AND telegram_id = $2',
+          [tenantId, x.telegram_id]
+        ).catch(() => {});
+        console.warn(`[NOTIFY]      ${x.ism || x.login} botni bloklagan — bog'lanish tozalandi. ` +
+                     `Botni blokdan chiqarib, qayta kirishi kerak.`);
+      }
     }
   } catch (e) {
     console.warn('[NOTIFY] xato:', e.message);

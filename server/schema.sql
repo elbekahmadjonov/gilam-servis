@@ -95,9 +95,44 @@ ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tenant_id uuid;
 ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS ijrochilar jsonb NOT NULL DEFAULT '{}';
 -- Buyurtma tugagan (to'lov qilingan) aniq vaqt — statistika shu bo'yicha
 ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tugatilgan_vaqt timestamptz;
+-- Tahrir tarixi: ism/telefon/manzil o'zgarishlari [{maydon,eski,yangi,vaqt,muallif}]
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS tahrirlar jsonb NOT NULL DEFAULT '[]';
+-- Buyurtma yuvilib bo'lgan (pardozda statusiga o'tgan) vaqt — yuvilgan hajm statistikasi uchun
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS yuvilgan_vaqt timestamptz;
+-- Mijozning qo'shimcha telefon raqamlari ["+998...", ...]
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS qoshimcha_telefonlar jsonb NOT NULL DEFAULT '[]';
+
+-- ── KORXONAGA XOS BUYURTMA RAQAMI ──
+-- `id` — global kalit (izohlar/harakatlar unga bog'langan), o'zgarmaydi.
+-- `raqam` — ekranda ko'rsatiladigan, HAR KORXONA uchun alohida sanaladigan raqam.
+ALTER TABLE buyurtmalar ADD COLUMN IF NOT EXISTS raqam bigint;
+
+-- Backfill (faqat bir marta, raqam bo'sh bo'lganlarga):
+--  • 'default' (Musaffo) — eski raqamlar saqlanadi: raqam = id
+--    (xodimlar yodda saqlagan raqamlar buzilmasin)
+--  • boshqa korxonalar   — 1 dan qayta sanaladi
+UPDATE buyurtmalar b SET raqam = b.id
+  FROM tenants t
+ WHERE t.id = b.tenant_id AND t.slug = 'default' AND b.raqam IS NULL;
+
+UPDATE buyurtmalar b SET raqam = s.n
+  FROM (
+    SELECT b2.id, row_number() OVER (PARTITION BY b2.tenant_id ORDER BY b2.id) AS n
+      FROM buyurtmalar b2
+      JOIN tenants t2 ON t2.id = b2.tenant_id
+     WHERE t2.slug <> 'default'
+  ) s
+ WHERE s.id = b.id AND b.raqam IS NULL;
+
+-- Bir korxonada raqam takrorlanmasin (bir vaqtda kelgan buyurtmalardan himoya)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_buyurtmalar_tenant_raqam
+  ON buyurtmalar(tenant_id, raqam);
 -- Mavjud tugagan buyurtmalarni backfill (yangilangan vaqtni taxminiy sana sifatida)
 UPDATE buyurtmalar SET tugatilgan_vaqt = yangilangan_vaqt
   WHERE status = 'tugadi' AND tugatilgan_vaqt IS NULL;
+-- Hozir pardozda turgan buyurtmalar: oxirgi yangilanish = pardozdaga o'tgan vaqt
+UPDATE buyurtmalar SET yuvilgan_vaqt = yangilangan_vaqt
+  WHERE status = 'qadoqlash' AND yuvilgan_vaqt IS NULL;
 
 
 -- ── 5. IZOHLAR ────────────────────────────────────────────────
@@ -269,10 +304,35 @@ CREATE TABLE IF NOT EXISTS xarajatlar (
   created_at  timestamptz   NOT NULL DEFAULT now()
 );
 
+-- Svet (elektr) xarajati — keyinroq qo'shilgan
+ALTER TABLE xarajatlar ADD COLUMN IF NOT EXISTS svet numeric(14,0) NOT NULL DEFAULT 0;
+
 ALTER TABLE xarajatlar DROP CONSTRAINT IF EXISTS xarajatlar_tenant_sana_key;
 ALTER TABLE xarajatlar ADD  CONSTRAINT xarajatlar_tenant_sana_key UNIQUE (tenant_id, sana);
 
 CREATE INDEX IF NOT EXISTS idx_xarajatlar_tenant_sana ON xarajatlar(tenant_id, sana);
+
+
+-- ── OYLIKLAR (xodim maoshi — kunlik xarajatlardan alohida) ──
+-- Har xodimga har oy uchun bitta yozuv. `oy` — oyning 1-kuni (2026-07-01).
+CREATE TABLE IF NOT EXISTS oyliklar (
+  id          bigserial     PRIMARY KEY,
+  tenant_id   uuid          NOT NULL REFERENCES tenants(id)  ON DELETE CASCADE,
+  xodim_id    uuid          NOT NULL REFERENCES xodimlar(id) ON DELETE CASCADE,
+  oy          date          NOT NULL,
+  summa       numeric(14,0) NOT NULL DEFAULT 0,
+  izoh        text                    DEFAULT '',
+  created_at  timestamptz   NOT NULL DEFAULT now()
+);
+
+-- Har to'lov ALOHIDA yozuv (log) bo'ladi: bitta xodimga bir oyda bir necha marta
+-- to'lash mumkin (avans, qo'shimcha va h.k.), oylik = shu yozuvlar yig'indisi.
+-- Shuning uchun (tenant, xodim, oy) noyobligi OLIB TASHLANDI. Mavjud yozuvlar
+-- o'z holicha qoladi — har biri bitta to'lov sifatida hisoblanadi.
+ALTER TABLE oyliklar DROP CONSTRAINT IF EXISTS oyliklar_tenant_xodim_oy_key;
+
+CREATE INDEX IF NOT EXISTS idx_oyliklar_tenant_oy ON oyliklar(tenant_id, oy);
+CREATE INDEX IF NOT EXISTS idx_oyliklar_xodim_oy  ON oyliklar(tenant_id, xodim_id, oy);
 
 
 -- ================================================================

@@ -7,6 +7,7 @@ export async function getXarajatlar() {
     return (rows || []).map(r => ({
       sana:   r.sana,
       gaz:    Number(r.gaz)    || 0,
+      svet:   Number(r.svet)   || 0,
       obed:   Number(r.obed)   || 0,
       ishchi: Number(r.ishchi) || 0,
       boshqa: Number(r.boshqa) || 0,

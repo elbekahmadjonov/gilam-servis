@@ -107,7 +107,7 @@ export default function Header({ searchQuery, onSearchChange, onNewOrder, onSele
                       }`}
                     >
                       <span className={`font-bold text-sm w-10 flex-shrink-0 ${dark ? 'text-white' : 'text-gray-900'}`}>
-                        #{order.id}
+                        #{order.raqam}
                       </span>
                       <div className="flex-1 min-w-0">
                         <p className={`text-sm font-medium truncate ${dark ? 'text-gray-200' : 'text-gray-800'}`}>

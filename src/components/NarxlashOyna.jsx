@@ -146,7 +146,7 @@ function fmt(v) { return parseFloat(v) || 0; }
 // ============================================================
 // Asosiy komponent
 // ============================================================
-export default function NarxlashOyna({ order, dark, onClose, onSave }) {
+export default function NarxlashOyna({ order, dark, onClose, onSave, tahrirRejim = false }) {
   const t = order.tovarlar || {};
   const n = order.narxlar   || {};
 
@@ -284,7 +284,7 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
         {/* Header */}
         <div className={`flex items-center justify-between px-5 py-3 border-b ${dark ? 'border-gray-800' : 'border-gray-100'}`}>
           <h3 className={`text-base font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
-            🫧 Narxlash — #{order.id}
+            {tahrirRejim ? "✏️ Narx / o'lchamni tahrirlash" : '🫧 Narxlash'} — #{order.raqam}
           </h3>
           <button onClick={onClose} className={`w-8 h-8 rounded-full flex items-center justify-center ${dark ? 'bg-gray-800 text-gray-400' : 'bg-gray-100 text-gray-500'}`}>
             <X size={16} />
@@ -552,7 +552,7 @@ export default function NarxlashOyna({ order, dark, onClose, onSave }) {
             Bekor
           </button>
           <button onClick={handleSave} className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-bold active:scale-95 transition-all">
-            ✓ Yakunlash
+            {tahrirRejim ? '✓ Saqlash' : '✓ Yakunlash'}
           </button>
         </div>
       </div>

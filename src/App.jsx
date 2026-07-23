@@ -289,9 +289,9 @@ function AppContent() {
               <NewOrder onCreated={() => { refresh(); navigate('/'); }} />
             } />
             <Route path="/qarz"       element={<Debt       orders={orders} onRefresh={refresh} />} />
-            <Route path="/tarix"      element={<History    orders={orders} />} />
-            <Route path="/otkaz"      element={<Cancelled  orders={orders} />} />
-            <Route path="/mijozlar"   element={<Customers  orders={orders} />} />
+            <Route path="/tarix"      element={<History    orders={orders} onRefresh={refresh} />} />
+            <Route path="/otkaz"      element={<Cancelled  orders={orders} onRefresh={refresh} />} />
+            <Route path="/mijozlar"   element={<Customers  orders={orders} onRefresh={refresh} />} />
             <Route path="/statistika" element={<Statistics orders={orders} role={role} />} />
             {role === 'Owner' && (
               <Route path="/hisob"    element={<Hisob      orders={orders} />} />
