@@ -43,3 +43,6 @@ server/add_test_users.mjs
 # Firebase maxfiy fayllar (git ga kirmasin!)
 android/app/google-services.json
 server/firebase-admin.json
+
+# Lokal git worktree'lar (subagent-driven development uchun)
+.worktrees/
